@@ -1,0 +1,72 @@
+@import "tailwindcss";
+
+/* ─── Signal Color System ─────────────────────────────────── */
+@theme inline {
+  /* Backgrounds */
+  --color-signal-sidebar:        #1b1c1f;
+  --color-signal-sidebar-header: #212227;
+  --color-signal-chat:           #141416;
+  --color-signal-hover:          #252628;
+  --color-signal-active:         #2e3035;
+  --color-signal-border:         #2d2e33;
+
+  /* Accent */
+  --color-signal-blue:           #2c6bed;
+  --color-signal-blue-hover:     #1a56e0;
+
+  /* Bubbles */
+  --color-signal-sent:           #2c6bed;
+  --color-signal-received:       #252527;
+
+  /* Text */
+  --color-signal-primary:        #e9e9ea;
+  --color-signal-secondary:      #8e8e93;
+  --color-signal-muted:          #636366;
+
+  /* Status */
+  --color-signal-online:         #4caf50;
+
+  /* Font */
+  --font-sans: "Inter", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+/* ─── Base Reset ──────────────────────────────────────────── */
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+html, body {
+  height: 100%;
+  overflow: hidden;
+}
+
+/* ─── Custom Scrollbar ────────────────────────────────────── */
+::-webkit-scrollbar {
+  width: 5px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.22);
+}
+
+/* ─── Utility ─────────────────────────────────────────────── */
+.message-bubble {
+  max-width: 65%;
+}
+
+@media (max-width: 640px) {
+  .message-bubble {
+    max-width: 82%;
+  }
+}
+
+/* Smooth conversation row transitions */
+.conversation-item {
+  transition: background-color 0.12s ease;
+}
