@@ -7,48 +7,68 @@ import AuthBackButton from "./AuthBackButton";
 import AuthInput from "./AuthInput";
 
 interface RegisterScreenProps {
-  onSubmit: (phoneNumber: string) => void;
+  /**
+   * Called with the full registration data when form validates.
+   * Matches the backend RegisterRequest schema exactly.
+   */
+  onSubmit: (params: {
+    username: string;
+    password: string;
+    display_name: string;
+    phone_number?: string;
+  }) => void;
   onBack: () => void;
   onSwitchToLogin: () => void;
+  /** True while the API call is in-flight */
+  isLoading?: boolean;
+  /** API error message to display below the form */
+  apiError?: string | null;
 }
 
 /**
- * Registration screen — collects phone number, username, and password.
+ * Registration screen — collects username, display name, password, and
+ * optional phone number.
  *
- * - Client-side validation UI only (no API calls).
- * - On valid submit, advances to the OTP screen.
+ * Field order matches the backend RegisterRequest schema:
+ *   { username, password, display_name, phone_number? }
+ *
+ * Client-side validation runs before the API call is made.
  */
 export default function RegisterScreen({
   onSubmit,
   onBack,
   onSwitchToLogin,
+  isLoading = false,
+  apiError,
 }: RegisterScreenProps) {
-  const [phone, setPhone] = useState("");
   const [username, setUsername] = useState("");
+  const [displayName, setDisplayName] = useState("");
+  const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [errors, setErrors] = useState<{
-    phone?: string;
     username?: string;
+    displayName?: string;
     password?: string;
     confirmPassword?: string;
   }>({});
 
   function validate(): boolean {
     const next: typeof errors = {};
-    if (!phone.trim()) next.phone = "Phone number is required.";
-    else if (!/^\+?[\d\s\-()]{7,15}$/.test(phone.trim()))
-      next.phone = "Enter a valid phone number.";
 
     if (!username.trim()) next.username = "Username is required.";
     else if (username.trim().length < 3)
       next.username = "Username must be at least 3 characters.";
-    else if (!/^[a-z0-9_]{3,32}$/i.test(username.trim()))
-      next.username = "Only letters, numbers and underscores allowed.";
+    else if (!/^[a-z0-9_]{3,50}$/i.test(username.trim()))
+      next.username = "Only letters, numbers, and underscores allowed.";
+
+    if (!displayName.trim()) next.displayName = "Display name is required.";
+    else if (displayName.trim().length < 1)
+      next.displayName = "Display name cannot be empty.";
 
     if (!password) next.password = "Password is required.";
-    else if (password.length < 8)
-      next.password = "Password must be at least 8 characters.";
+    else if (password.length < 4)
+      next.password = "Password must be at least 4 characters.";
 
     if (!confirmPassword)
       next.confirmPassword = "Please confirm your password.";
@@ -61,7 +81,14 @@ export default function RegisterScreen({
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    if (validate()) onSubmit(phone.trim());
+    if (!isLoading && validate()) {
+      onSubmit({
+        username: username.trim(),
+        password,
+        display_name: displayName.trim(),
+        phone_number: phone.trim() || undefined,
+      });
+    }
   }
 
   return (
@@ -84,20 +111,6 @@ export default function RegisterScreen({
       {/* ── Form ──────────────────────────────────────── */}
       <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-4">
         <AuthInput
-          id="register-phone"
-          label="Phone Number"
-          type="tel"
-          placeholder="+1 (555) 000-0000"
-          value={phone}
-          onChange={(v) => {
-            setPhone(v);
-            if (errors.phone) setErrors((e) => ({ ...e, phone: undefined }));
-          }}
-          error={errors.phone}
-          autoComplete="tel"
-        />
-
-        <AuthInput
           id="register-username"
           label="Username"
           type="text"
@@ -110,6 +123,32 @@ export default function RegisterScreen({
           }}
           error={errors.username}
           autoComplete="username"
+          autoFocus
+        />
+
+        <AuthInput
+          id="register-display-name"
+          label="Display Name"
+          type="text"
+          placeholder="Alice Walker"
+          value={displayName}
+          onChange={(v) => {
+            setDisplayName(v);
+            if (errors.displayName)
+              setErrors((e) => ({ ...e, displayName: undefined }));
+          }}
+          error={errors.displayName}
+          autoComplete="name"
+        />
+
+        <AuthInput
+          id="register-phone"
+          label="Phone Number (optional)"
+          type="tel"
+          placeholder="+1 (555) 000-0000"
+          value={phone}
+          onChange={(v) => setPhone(v)}
+          autoComplete="tel"
         />
 
         <AuthInput
@@ -142,12 +181,31 @@ export default function RegisterScreen({
           autoComplete="new-password"
         />
 
+        {/* API error */}
+        {apiError && (
+          <p role="alert" className="text-red-400 text-[13px] text-center">
+            {apiError}
+          </p>
+        )}
+
         <button
           id="register-submit-btn"
           type="submit"
-          className="w-full mt-2 py-3 rounded-[10px] bg-signal-blue text-white font-semibold text-[15px] hover:bg-signal-blue-hover active:scale-[0.98] transition-all duration-150"
+          disabled={isLoading}
+          className="w-full mt-2 py-3 rounded-[10px] bg-signal-blue text-white font-semibold text-[15px] hover:bg-signal-blue-hover active:scale-[0.98] transition-all duration-150 disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
         >
-          Create Account
+          {isLoading ? (
+            <>
+              <span
+                className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full"
+                style={{ animation: "spin 0.7s linear infinite" }}
+                aria-hidden="true"
+              />
+              Creating account…
+            </>
+          ) : (
+            "Create Account"
+          )}
         </button>
       </form>
 

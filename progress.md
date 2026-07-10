@@ -11,9 +11,10 @@
 - [x] **Milestone 5:** Backend verification & testing
 - [x] **Milestone 6:** Frontend UI scaffolding (Next.js + Tailwind + Chat shell)
 - [x] **Milestone 7:** Frontend authentication UI flow (6 screens, fully functional)
-- [ ] **Milestone 8:** Frontend API integration (REST calls)
-- [ ] **Milestone 9:** Real-time chat integration (WebSocket client)
-- [ ] **Milestone 10:** Deployment
+- [x] **Milestone 8:** Frontend Auth API integration (REST calls for login/register/OTP)
+- [ ] **Milestone 9:** Frontend Chat API integration (REST calls for messages/conversations)
+- [ ] **Milestone 10:** Real-time chat integration (WebSocket client)
+- [ ] **Milestone 11:** Deployment
 
 ## Recently Completed Work
 - Implemented full FastAPI backend.
@@ -35,6 +36,13 @@
   - Smooth entrance animations (`@keyframes authEnter`)
   - Zero API calls — pure mock state navigation
 - Fixed hydration mismatches: deterministic BASE_TIME, pinned `"en-GB"` locale + UTC timezone
+- **[Milestone 8]** Connected Auth UI to FastAPI backend:
+  - Built generic API client wrapper (`lib/api.ts`) with typed errors.
+  - Implemented `AuthService` (`lib/authService.ts`) mapped to backend Pydantic schemas.
+  - Created global `AuthContext` to manage `user`, `token`, loading state, and session restore.
+  - Wired `page.tsx` for protected routing (shows AuthFlow for guests, Chat UI for authenticated users).
+  - Wired `LoginScreen`, `RegisterScreen`, `OtpScreen`, `DisplayNameScreen`, and `AvatarScreen` to execute real API calls with loading spinners and inline error handling.
+  - Added real user avatar and Logout button to `SidebarHeader`.
 - Production build verified: `✓ Compiled successfully` — zero TypeScript errors, zero lint errors
 
 ## Component Status
@@ -45,8 +53,8 @@
 | **Authentication** | ✅ Complete | JWT + bcrypt implemented and verified |
 | **WebSocket** | ✅ Complete | Multiplexed connection, broadcasting working |
 | **Frontend Shell (Chat UI)** | ✅ Complete | Next.js 15 + Tailwind CSS v4, 21 components |
-| **Frontend Auth UI** | ✅ Complete | 6-screen auth flow, 11 new components, mock navigation |
-| **Frontend API Integration** | ❌ Pending | REST calls & auth token storage not yet connected |
+| **Frontend Auth UI** | ✅ Complete | 6-screen auth flow, 11 new components, real API integration |
+| **Frontend Chat API Integration** | ❌ Pending | REST calls for fetching conversations/messages not yet connected |
 | **WebSocket Client** | ❌ Pending | Real-time client not yet implemented |
 | **Testing** | ⚠️ Partial | Backend manually tested, no unit tests yet |
 | **Deployment** | ❌ Pending | Nothing deployed yet |
@@ -57,10 +65,10 @@
 - **Suggested commit:** `feat(frontend): implement Milestone 2 — authentication UI flow`
 
 ## Current Blockers
-- None. Ready for API integration milestone.
+- None. Ready for Chat API integration milestone.
 
 ## Next Milestone
-**Milestone 8: Frontend API Integration** — Connect auth screens to FastAPI endpoints. Store JWT. Replace mock conversations and messages with real API data.
+**Milestone 9: Frontend Chat API Integration** — Replace mock conversations and messages with real API data (`/api/conversations`).
 
 ## TODO Checklist
 - [x] Initialize Next.js project in `frontend/`.
@@ -68,8 +76,8 @@
 - [x] Add TailwindCSS for styling.
 - [x] Implement Chat UI with dummy data.
 - [x] Add authentication screens (Login, Register, OTP, DisplayName, Avatar).
-- [ ] Replace dummy data with `fetch` calls to backend `/api/*`.
-- [ ] Implement JWT storage and auth context.
+- [x] Implement JWT storage and auth context.
+- [ ] Replace dummy chat data with `fetch` calls to backend `/api/conversations`.
 - [ ] Implement WebSocket client for real-time updates.
 - [ ] Write `README.md`.
 - [ ] Deploy frontend & backend.

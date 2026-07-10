@@ -43,11 +43,15 @@ The application utilises a layered, client-server architecture:
   - Smooth `authEnter` fade+slide-up animation on every screen
   - Reusable sub-components: `AuthFlow`, `AuthContainer`, `SignalLogo`, `AuthBackButton`, `AuthInput`
   - Zero API calls — pure mock `useState` navigation
-  - Full accessibility: `aria-label`, `aria-invalid`, `aria-describedby`, `role="alert"`, `role="group"`
+✅ **Authentication API Integration (Milestone 8):**
+  - Global `AuthContext` managing session state.
+  - REST integration for Login, Register, OTP verification, and Profile updates.
+  - JWT persistence in `localStorage` and automatic session restore.
+  - Protected routing: guests see AuthFlow, authenticated users see Chat UI.
+  - Real user avatar and logout flow implemented in SidebarHeader.
 
 ## Pending Features
-❌ **API Integration:** Connect auth screens and chat UI to FastAPI REST endpoints.
-❌ **JWT Storage:** Store and refresh access tokens; protect routes.
+❌ **Chat API Integration:** Connect chat UI to FastAPI REST endpoints (`/api/conversations`).
 ❌ **WebSocket Client:** Real-time messages, presence, typing indicators.
 ❌ **Deployment:** Host frontend on Vercel, backend on Render/Railway.
 ❌ **README:** Comprehensive documentation.
@@ -57,4 +61,4 @@ The application utilises a layered, client-server architecture:
 The entire backend and frontend UI shell are fully built. The next phase connects them together via REST APIs and WebSockets.
 
 ## Next Milestone
-**Milestone 8: Frontend API Integration** — Replace mock data with real `fetch` calls. Store JWT. Build an `AuthContext`. Protect routes. Connect conversations and messages to the live backend.
+**Milestone 9: Frontend Chat API Integration** — Replace mock conversations and messages with real API data. Connect conversations and messages to the live backend.

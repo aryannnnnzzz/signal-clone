@@ -1,18 +1,25 @@
-import { PenSquare, Settings, MoreVertical } from "lucide-react";
+"use client";
+
+import { PenSquare, Settings, LogOut } from "lucide-react";
 import Avatar from "@/components/ui/Avatar";
-import { currentUser } from "@/data/mockData";
+import { useAuth } from "@/contexts/AuthContext";
 
 /**
  * Fixed top bar of the sidebar.
  * Shows the current user's avatar (left), the Signal logo + wordmark (centre),
  * and action icon buttons (right) — identical to Signal Desktop layout.
+ *
+ * Now uses the real authenticated user and provides a logout button.
  */
 export default function SidebarHeader() {
+  const { user, logout } = useAuth();
+
   return (
     <header className="flex items-center justify-between px-3 py-3 bg-signal-sidebar-header border-b border-signal-border flex-shrink-0 h-[60px]">
       {/* Current user avatar */}
       <Avatar
-        name={currentUser.displayName}
+        name={user?.display_name || "User"}
+        src={user?.avatar_url || undefined}
         size="sm"
         className="cursor-pointer"
       />
@@ -55,11 +62,12 @@ export default function SidebarHeader() {
           <Settings size={17} />
         </button>
         <button
-          className="p-1.5 rounded-full text-signal-secondary hover:text-signal-primary hover:bg-signal-hover transition-colors"
-          aria-label="More options"
-          title="More options"
+          onClick={logout}
+          className="p-1.5 rounded-full text-signal-secondary hover:text-red-400 hover:bg-signal-hover transition-colors"
+          aria-label="Log out"
+          title="Log out"
         >
-          <MoreVertical size={17} />
+          <LogOut size={17} />
         </button>
       </div>
     </header>

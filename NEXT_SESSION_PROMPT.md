@@ -58,40 +58,29 @@ The auth flow is pure UI — no API calls. `page.tsx` gates the chat UI behind a
 
 ## 3. What remains (your task)
 
-### Milestone 8: Frontend API Integration
+### Milestone 8: Frontend Auth API Integration (✅ Complete)
+- `AuthContext` implemented and manages session state via `localStorage`.
+- `LoginScreen`, `RegisterScreen`, `OtpScreen`, `DisplayNameScreen`, and `AvatarScreen` successfully integrated with FastAPI REST endpoints.
+- Protected routing set up in `app/page.tsx`.
+- User avatar and Logout button integrated into `SidebarHeader`.
+- Added loading spinners and error handling UI for API calls.
 
-Replace all mock/dummy data with real API calls.
+### Milestone 9: Frontend Chat API Integration
 
-#### Step 1 — Create `AuthContext`
-Create `frontend/contexts/AuthContext.tsx`:
-- Wraps the app in a React Context
-- Stores: `user`, `token`, `isAuthenticated`, `isLoading`
-- Exposes actions: `login(phone, password)`, `register(phone, username, password)`, `logout()`, `verifyOtp(code)`
-- Persists token in `localStorage` (or `httpOnly` cookie if preferred)
-- Reads `GET /api/auth/me` on mount to restore session
+Replace all mock/dummy chat data with real API calls.
 
-#### Step 2 — Wire auth screens to real API
-- `LoginScreen` → `POST /api/auth/login` → store JWT → redirect to OTP (or app if OTP already done)
-- `RegisterScreen` → `POST /api/auth/register` → store JWT → go to OTP
-- `OtpScreen` → `POST /api/auth/verify-otp` with `{ "code": "123456" }` → on success go to DisplayName
-- `DisplayNameScreen` → `PATCH /api/users/me` with `{ "display_name": "..." }`
-- `AvatarScreen` → `PATCH /api/users/me` with avatar (or skip)
-
-#### Step 3 — Replace mock conversations
+#### Step 1 — Replace mock conversations
 - `GET /api/conversations` → replace `mockConversations`
 - `GET /api/conversations/{id}/messages` → replace `mockMessages[id]`
 
-#### Step 4 — WebSocket Client
+#### Step 2 — WebSocket Client
 Create `frontend/contexts/WebSocketContext.tsx`:
 - Connects to `ws://localhost:8000/ws?token=<jwt>`
 - Handles inbound frame types: `message`, `typing`, `typing_stop`, `read_receipt`, `delivery_receipt`, `presence`
 - Exposes `sendMessage(conversationId, content)` action
 - Updates conversation/message state reactively
 
-#### Step 5 — Protected routes
-- If user visits `/` without a token → show `AuthFlow`
-- If token exists → go straight to `AppLayout`
-- (Current mock already does this, just wire it to real token check)
+
 
 ---
 
@@ -130,9 +119,7 @@ Authorization: Bearer <access_token>
 
 ## 6. Technical debt to address
 
-- `AvatarScreen.tsx` shows the initial "A" hardcoded — should derive from the `displayName` from the previous step. This is easy to fix once `AuthContext` carries the in-progress registration state.
-- No error handling UI for failed API calls yet (network errors, 401s, etc.)
-- No loading spinners on auth form submit buttons yet (show spinner while awaiting API)
+- Currently none recorded for the frontend since auth flow spinners and dynamic avatar initial are completed. Backend testing coverage is partial.
 
 ---
 
@@ -140,6 +127,6 @@ Authorization: Bearer <access_token>
 
 Before writing any code, confirm you have read all four documentation files and understand:
 1. The backend is read-only.
-2. The auth flow is already built as pure UI — your job is to wire it to real endpoints.
-3. The `AuthFlow` orchestrator in `AuthContext` should replace the `isAuthenticated` mock boolean in `page.tsx`.
+2. The auth flow is completely integrated with the backend API.
+3. The remaining task is to integrate the real Chat API and WebSockets.
 4. No redesigns of existing components.

@@ -8,6 +8,8 @@ interface AvatarScreenProps {
   onComplete: (avatarUrl: string | undefined) => void;
   onBack: () => void;
   onSkip: () => void;
+  /** Used to derive the initials shown in the colour avatar preview */
+  displayName?: string;
 }
 
 /** Pre-selected colour swatches for the generated avatar background */
@@ -36,6 +38,7 @@ export default function AvatarScreen({
   onComplete,
   onBack,
   onSkip,
+  displayName = "",
 }: AvatarScreenProps) {
   const [selectedColor, setSelectedColor] = useState(AVATAR_COLORS[0]);
   const [uploadedUrl, setUploadedUrl] = useState<string | null>(null);
@@ -77,8 +80,10 @@ export default function AvatarScreen({
     onComplete(uploadedUrl ?? undefined);
   }
 
-  /* ── Preview ──────────────────────────────────────── */
-  const initials = "A"; // placeholder; real app uses displayName from previous step
+  /* ── Preview ───────────────────────────────────────── */
+  const initials = displayName.trim()
+    ? displayName.trim().charAt(0).toUpperCase()
+    : "A";
 
   return (
     <AuthContainer>

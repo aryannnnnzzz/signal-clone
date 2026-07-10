@@ -7,43 +7,50 @@ import AuthBackButton from "./AuthBackButton";
 import AuthInput from "./AuthInput";
 
 interface LoginScreenProps {
-  onSubmit: (phoneNumber: string) => void;
+  /** Called with (username, password) when form validates */
+  onSubmit: (username: string, password: string) => void;
   onBack: () => void;
   onSwitchToRegister: () => void;
+  /** True while the API call is in-flight */
+  isLoading?: boolean;
+  /** API error message to display below the form */
+  apiError?: string | null;
 }
 
 /**
- * Login screen — collects phone number + password.
+ * Login screen — collects username + password.
  *
- * - Client-side validation UI only (no API calls).
- * - Accepting code 123456 is handled in OtpScreen, not here.
+ * The backend login endpoint uses `username`, not phone_number.
+ * Client-side validation runs before the API call is made.
  */
 export default function LoginScreen({
   onSubmit,
   onBack,
   onSwitchToRegister,
+  isLoading = false,
+  apiError,
 }: LoginScreenProps) {
-  const [phone, setPhone] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
-  const [errors, setErrors] = useState<{ phone?: string; password?: string }>(
+  const [errors, setErrors] = useState<{ username?: string; password?: string }>(
     {}
   );
 
   function validate(): boolean {
     const next: typeof errors = {};
-    if (!phone.trim()) next.phone = "Phone number is required.";
-    else if (!/^\+?[\d\s\-()]{7,15}$/.test(phone.trim()))
-      next.phone = "Enter a valid phone number.";
+    if (!username.trim()) next.username = "Username is required.";
+    else if (username.trim().length < 3)
+      next.username = "Username must be at least 3 characters.";
     if (!password) next.password = "Password is required.";
-    else if (password.length < 6)
-      next.password = "Password must be at least 6 characters.";
+    else if (password.length < 4)
+      next.password = "Password must be at least 4 characters.";
     setErrors(next);
     return Object.keys(next).length === 0;
   }
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    if (validate()) onSubmit(phone.trim());
+    if (!isLoading && validate()) onSubmit(username.trim(), password);
   }
 
   return (
@@ -66,17 +73,18 @@ export default function LoginScreen({
       {/* ── Form ──────────────────────────────────────── */}
       <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-4">
         <AuthInput
-          id="login-phone"
-          label="Phone Number"
-          type="tel"
-          placeholder="+1 (555) 000-0000"
-          value={phone}
+          id="login-username"
+          label="Username"
+          type="text"
+          placeholder="alice_walker"
+          value={username}
           onChange={(v) => {
-            setPhone(v);
-            if (errors.phone) setErrors((e) => ({ ...e, phone: undefined }));
+            setUsername(v);
+            if (errors.username) setErrors((e) => ({ ...e, username: undefined }));
           }}
-          error={errors.phone}
-          autoComplete="tel"
+          error={errors.username}
+          autoComplete="username"
+          autoFocus
         />
 
         <AuthInput
@@ -94,12 +102,31 @@ export default function LoginScreen({
           autoComplete="current-password"
         />
 
+        {/* API error */}
+        {apiError && (
+          <p role="alert" className="text-red-400 text-[13px] text-center">
+            {apiError}
+          </p>
+        )}
+
         <button
           id="login-submit-btn"
           type="submit"
-          className="w-full mt-2 py-3 rounded-[10px] bg-signal-blue text-white font-semibold text-[15px] hover:bg-signal-blue-hover active:scale-[0.98] transition-all duration-150"
+          disabled={isLoading}
+          className="w-full mt-2 py-3 rounded-[10px] bg-signal-blue text-white font-semibold text-[15px] hover:bg-signal-blue-hover active:scale-[0.98] transition-all duration-150 disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
         >
-          Continue
+          {isLoading ? (
+            <>
+              <span
+                className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full"
+                style={{ animation: "spin 0.7s linear infinite" }}
+                aria-hidden="true"
+              />
+              Logging in…
+            </>
+          ) : (
+            "Continue"
+          )}
         </button>
       </form>
 

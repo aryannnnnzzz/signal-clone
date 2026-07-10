@@ -12,40 +12,51 @@
 # Current Project Status
 - **Overall completion:** ~65%
 - **Backend completion:** 100% (Fully tested and verified)
-- **Frontend completion:** ~35% (Auth UI + Chat UI shell complete; API integration pending)
+- **Frontend completion:** ~60% (Auth UI, Chat UI shell, and Auth API Integration complete; Chat API pending)
 - **Deployment completion:** 0%
 - **README completion:** 0%
 
 ---
 
-# What Was Built This Session (Milestone 2 — Auth UI)
+# What Was Built This Session (Auth API Integration + Auth Flow Bug Fix)
 
 ## New Files Created
 ```
-frontend/components/auth/
-├── AuthFlow.tsx         ← Orchestrator: manages screen transitions
-├── AuthContainer.tsx    ← Shared animated wrapper card
-├── SignalLogo.tsx       ← Inline SVG Signal logo (gradient circle + bubble)
-├── AuthBackButton.tsx   ← Reusable ← back button with hover animation
-├── AuthInput.tsx        ← Reusable input: dark styled, error state, eye toggle
-├── WelcomeScreen.tsx    ← First screen: brand, tagline, Login/Register CTAs
-├── LoginScreen.tsx      ← Phone + password form, client-side validation
-├── RegisterScreen.tsx   ← Phone + username + password + confirm, validation
-├── OtpScreen.tsx        ← 6-digit OTP inputs, paste, countdown, mock verify
-├── DisplayNameScreen.tsx← Name input with 64-char counter
-└── AvatarScreen.tsx     ← Color swatches, drag-and-drop upload, preview
+frontend/lib/api.ts              ← Centralized fetch client with JWT handling
+frontend/lib/authService.ts      ← Typed wrappers for Auth API endpoints
+frontend/contexts/AuthContext.tsx← Global state for user session & actions
 ```
 
 ## Modified Files
 ```
-frontend/app/page.tsx       ← Added isAuthenticated gate; renders AuthFlow first
-frontend/app/globals.css    ← Added @keyframes authEnter animation
+frontend/app/layout.tsx          ← Wrapped with AuthProvider
+frontend/app/page.tsx            ← Uses AuthContext to gate Chat UI or AuthFlow
+frontend/app/globals.css         ← Added bounce/spin animations
+frontend/components/auth/*       ← Wired all screens to useAuth and handle API errors
+frontend/components/sidebar/SidebarHeader.tsx ← Displays real user avatar, added Logout
+frontend/types/index.ts          ← Added AuthUser type matching backend UserOut
 ```
+
+## Bug Fix: Auth Flow Skipping OTP/DisplayName/Avatar
+**Root cause:** `AuthContext.register()` called `setUser(data.user)` immediately after
+a successful `POST /api/auth/register`. Because `isAuthenticated` is derived as
+`user !== null`, this instantly flipped the flag to `true` and caused `page.tsx` to
+render `<AppLayout>` before the OTP → DisplayName → Avatar onboarding screens ran.
+
+**Fix (pendingUser pattern):**
+- `register()` and `login()` now set `pendingUser` (not `user`) so `isAuthenticated`
+  stays `false` during the onboarding flow.
+- A new `completeAuth()` action promotes `pendingUser → user`, which flips
+  `isAuthenticated` to `true` and triggers navigation to the Chat UI.
+- `completeAuth()` is called exclusively from `handleAvatarComplete` in `AuthFlow.tsx`,
+  making the Avatar screen the single, correct completion point.
+- `updateProfile()` correctly routes updates to `pendingUser` during onboarding and
+  to `user` after authentication is complete.
 
 ## Auth Flow Sequence
 ```
-Welcome → Login → OTP → DisplayName → Avatar → Chat App
-Welcome → Register → OTP → DisplayName → Avatar → Chat App
+Welcome → Login    → OTP → DisplayName → Avatar → completeAuth() → Chat App
+Welcome → Register → OTP → DisplayName → Avatar → completeAuth() → Chat App
 ```
 
 ---
@@ -221,8 +232,9 @@ frontend/
 - Ephemeral typing indicators.
 - Online/offline presence broadcasting.
 - Database seeding with mock data.
-- **[NEW] Complete multi-step authentication UI flow (6 screens).**
-- **[NEW] Chat UI shell with 21 components, responsive, Signal-faithful design.**
+- Complete multi-step authentication UI flow (6 screens).
+- Chat UI shell with 21 components, responsive, Signal-faithful design.
+- **[NEW] Auth API Integration:** Full integration of Auth UI with FastAPI backend, JWT storage, protected routing, loading states, and error handling.
 
 ---
 
@@ -245,10 +257,8 @@ All the following features have been manually tested against the running server 
 ---
 
 # Pending Features
-- [ ] **Frontend API Integration**: Replace mock data with `fetch` calls to backend endpoints.
+- [ ] **Frontend Chat API Integration**: Replace mock conversations and messages with `fetch` calls to backend endpoints.
 - [ ] **WebSocket Client**: Connect frontend to `/ws` for real-time messaging, presence, typing indicators.
-- [ ] **Auth Token Storage**: On real login/register, store JWT in `localStorage` or `httpOnly` cookie.
-- [ ] **Protected Route Guard**: Redirect unauthenticated users to Welcome screen.
 - [ ] **Real-time chat testing**: Verify end-to-end messaging flow in the browser.
 - [ ] **Responsive UI**: Audit on mobile, tablet, and desktop.
 - [ ] **Deployment**: Deploy frontend to Vercel/Netlify, backend to Render/Railway.
@@ -266,8 +276,8 @@ All the following features have been manually tested against the running server 
 - **Why `message_status` junction table?** A message sent to a 50-person group needs 49 delivery statuses. Embedding this in the `messages` table is impossible relationally.
 - **Why Service Layer?** Decouples business logic from HTTP transport, allowing WebSocket handlers and REST routes to invoke the same exact functions.
 - **Why Cursor Pagination?** Offset pagination skips or duplicates messages when new messages arrive. Cursor (using `created_at`) guarantees consistency.
-- **Why local useState for auth (not Context/Redux)?** Milestones 1–2 are pure UI scaffolding. Adding global state now would be premature. Global auth state will be introduced in Milestone 3 (API integration) when the JWT needs to be stored and shared.
-- **Why `AuthFlow` orchestrator pattern?** Keeps all navigation logic in one place; screens are pure presentational components that receive callbacks. Makes it trivial to swap mock navigation for real router navigation in Milestone 3.
+- **Why local useState for auth (not Context/Redux)?** Initially pure UI scaffolding. Global AuthContext was introduced in Auth API Integration.
+- **Why `AuthFlow` orchestrator pattern?** Keeps all navigation logic in one place. Wired effortlessly to real `useAuth` context.
 
 ---
 
@@ -281,9 +291,6 @@ All the following features have been manually tested against the running server 
 
 ---
 
-# Known Issues
-- **Technical Debt:** Auth flow uses mock state only; needs real JWT integration in Milestone 3.
-- **AvatarScreen:** Uses the initial "A" as the preview letter — should derive from the `displayName` entered in the previous step. This can be fixed when converting to a real auth context.
 - **Hydration:** All timestamp formatting uses `"en-GB"` locale and `timeZone: "UTC"` — fully deterministic, no hydration issues.
 
 ---
@@ -291,14 +298,14 @@ All the following features have been manually tested against the running server 
 # Git Status
 - **Latest branch:** `main`
 - **Latest commit message:** `Complete backend scaffold and authentication`
-- **GitHub repository status:** Behind (Milestones 1+2 frontend not yet committed)
+- **GitHub repository status:** Behind
 - **Suggested commit for this session:**
   ```
-  feat(frontend): implement Milestone 2 — authentication UI flow
+  feat(frontend): implement Auth API integration (Milestone 8)
   ```
 
 ---
 
 # Next Milestone
-**Milestone 3: Frontend API Integration** — Replace all mock/dummy data with real `fetch` calls to the FastAPI backend. Introduce a global auth context that stores the JWT and exposes `login`, `logout`, `register` actions. Gate every route with an auth check.
+**Milestone 9: Frontend Chat API Integration** — Replace all mock/dummy chat data with real `fetch` calls to the FastAPI backend (`/api/conversations`). Connect the Chat UI components to the live backend.
 **Backend must remain unchanged.**

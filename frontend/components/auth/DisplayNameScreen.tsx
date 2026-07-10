@@ -8,6 +8,12 @@ import AuthInput from "./AuthInput";
 interface DisplayNameScreenProps {
   onSubmit: (displayName: string) => void;
   onBack: () => void;
+  /** Pre-fill the input (e.g. from the registration display_name field) */
+  initialValue?: string;
+  /** True while the API call is in-flight */
+  isLoading?: boolean;
+  /** API error message to display below the form */
+  apiError?: string | null;
 }
 
 /**
@@ -19,8 +25,11 @@ interface DisplayNameScreenProps {
 export default function DisplayNameScreen({
   onSubmit,
   onBack,
+  initialValue = "",
+  isLoading = false,
+  apiError,
 }: DisplayNameScreenProps) {
-  const [displayName, setDisplayName] = useState("");
+  const [displayName, setDisplayName] = useState(initialValue);
   const [error, setError] = useState<string | undefined>();
 
   function validate(): boolean {
@@ -41,7 +50,7 @@ export default function DisplayNameScreen({
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    if (validate()) onSubmit(displayName.trim());
+    if (!isLoading && validate()) onSubmit(displayName.trim());
   }
 
   const remaining = 64 - displayName.length;
@@ -108,12 +117,31 @@ export default function DisplayNameScreen({
           </p>
         </div>
 
+        {/* API error */}
+        {apiError && (
+          <p role="alert" className="text-red-400 text-[13px] text-center">
+            {apiError}
+          </p>
+        )}
+
         <button
           id="display-name-submit-btn"
           type="submit"
-          className="w-full mt-1 py-3 rounded-[10px] bg-signal-blue text-white font-semibold text-[15px] hover:bg-signal-blue-hover active:scale-[0.98] transition-all duration-150"
+          disabled={isLoading}
+          className="w-full mt-1 py-3 rounded-[10px] bg-signal-blue text-white font-semibold text-[15px] hover:bg-signal-blue-hover active:scale-[0.98] transition-all duration-150 disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
         >
-          Next
+          {isLoading ? (
+            <>
+              <span
+                className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full"
+                style={{ animation: "spin 0.7s linear infinite" }}
+                aria-hidden="true"
+              />
+              Saving…
+            </>
+          ) : (
+            "Next"
+          )}
         </button>
       </form>
     </AuthContainer>

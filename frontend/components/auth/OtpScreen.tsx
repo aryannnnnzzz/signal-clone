@@ -14,13 +14,17 @@ import AuthBackButton from "./AuthBackButton";
 
 interface OtpScreenProps {
   phoneNumber: string;
-  onVerified: () => void;
+  /** Called with the OTP code string when user submits */
+  onVerified: (otp: string) => void;
   onBack: () => void;
   onResend: () => void;
+  /** True while the API call is in-flight */
+  isLoading?: boolean;
+  /** API error message to display below inputs */
+  apiError?: string | null;
 }
 
 const OTP_LENGTH = 6;
-const MOCK_VALID_CODE = "123456";
 
 /**
  * OTP Verification screen.
@@ -35,6 +39,8 @@ export default function OtpScreen({
   onVerified,
   onBack,
   onResend,
+  isLoading = false,
+  apiError,
 }: OtpScreenProps) {
   const [digits, setDigits] = useState<string[]>(Array(OTP_LENGTH).fill(""));
   const [error, setError] = useState<string | null>(null);
@@ -50,14 +56,8 @@ export default function OtpScreen({
 
   /* ── Verify ───────────────────────────────────────── */
   function verify(code: string) {
-    if (code === MOCK_VALID_CODE) {
-      setError(null);
-      onVerified();
-    } else {
-      setError("Incorrect code. Try 123456 for demo.");
-      // Shake inputs back to empty
-      setDigits(Array(OTP_LENGTH).fill(""));
-      inputRefs.current[0]?.focus();
+    if (code.length === OTP_LENGTH) {
+      onVerified(code);
     }
   }
 
@@ -125,7 +125,7 @@ export default function OtpScreen({
       setError("Please enter all 6 digits.");
       return;
     }
-    verify(code);
+    if (!isLoading) verify(code);
   }
 
   const maskedPhone = phoneNumber
@@ -191,13 +191,13 @@ export default function OtpScreen({
           ))}
         </div>
 
-        {/* Error message */}
-        {error && (
+        {/* Error message — local validation or API error */}
+        {(error || apiError) && (
           <p
             role="alert"
             className="text-center text-red-400 text-[13px] mb-4"
           >
-            {error}
+            {error ?? apiError}
           </p>
         )}
 
@@ -209,9 +209,21 @@ export default function OtpScreen({
         <button
           id="otp-verify-btn"
           type="submit"
-          className="w-full py-3 rounded-[10px] bg-signal-blue text-white font-semibold text-[15px] hover:bg-signal-blue-hover active:scale-[0.98] transition-all duration-150"
+          disabled={isLoading}
+          className="w-full py-3 rounded-[10px] bg-signal-blue text-white font-semibold text-[15px] hover:bg-signal-blue-hover active:scale-[0.98] transition-all duration-150 disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
         >
-          Verify
+          {isLoading ? (
+            <>
+              <span
+                className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full"
+                style={{ animation: "spin 0.7s linear infinite" }}
+                aria-hidden="true"
+              />
+              Verifying…
+            </>
+          ) : (
+            "Verify"
+          )}
         </button>
       </form>
 

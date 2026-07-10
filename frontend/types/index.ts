@@ -2,6 +2,22 @@ export type MessageStatus = "sending" | "sent" | "delivered" | "read";
 export type ConversationType = "dm" | "group";
 export type ContentType = "text" | "image" | "file";
 
+/**
+ * Mirrors the backend UserOut Pydantic schema.
+ * Field names use snake_case to match the JSON response directly,
+ * avoiding any transform layer in the API client.
+ */
+export interface AuthUser {
+  id: string;
+  username: string;
+  display_name: string;
+  phone_number: string | null;
+  avatar_url: string | null;
+  is_online: boolean;
+  last_seen_at: string | null;
+  created_at: string;
+}
+
 export interface User {
   id: string;
   username: string;
