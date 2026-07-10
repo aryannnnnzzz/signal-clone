@@ -26,72 +26,77 @@ Location: `frontend/`
 - Next.js 15, App Router, TypeScript, TailwindCSS v4
 - 21 components: Sidebar, ConversationList, ChatHeader, MessageBubble, MessageComposer, Avatar, StatusIcon, EmptyState, etc.
 - Responsive layout (desktop split-pane + mobile toggle)
-- Mock data in `frontend/data/mockData.ts`
 
 ### Frontend — Milestone 7: Authentication UI (✅ Complete)
 Location: `frontend/components/auth/`
-- 11 new components:
-  - `AuthFlow.tsx` — orchestrator (manages which screen is shown)
-  - `AuthContainer.tsx` — shared animated card wrapper
-  - `SignalLogo.tsx` — inline SVG logo
-  - `AuthBackButton.tsx` — reusable back button
-  - `AuthInput.tsx` — reusable input with error state + password toggle
-  - `WelcomeScreen.tsx` — landing with Login/Register CTAs
-  - `LoginScreen.tsx` — phone + password, client-side validation
-  - `RegisterScreen.tsx` — phone + username + password + confirm
-  - `OtpScreen.tsx` — 6-digit auto-advancing inputs, paste, countdown, mock code `123456`
-  - `DisplayNameScreen.tsx` — name input with 64-char counter
-  - `AvatarScreen.tsx` — colour swatches + drag-and-drop upload + preview
+- 11 auth components: AuthFlow, AuthContainer, SignalLogo, AuthBackButton, AuthInput, WelcomeScreen, LoginScreen, RegisterScreen, OtpScreen, DisplayNameScreen, AvatarScreen
 
 Auth flow sequence:
 ```
-Welcome → Login OR Register → OTP → DisplayName → Avatar → Chat App
+Welcome → Login OR Register → OTP → DisplayName → Avatar → completeAuth() → Chat App
 ```
 
-The auth flow is pure UI — no API calls. `page.tsx` gates the chat UI behind a mock `isAuthenticated` boolean.
+### Frontend — Milestone 8: Auth API Integration (✅ Complete)
+- `AuthContext` with `pendingUser` pattern: `register()`/`login()` store `pendingUser` (not `user`) so `isAuthenticated` stays `false` during onboarding. `completeAuth()` promotes it to `user` at the Avatar step.
+- `LoginScreen`, `RegisterScreen`, `OtpScreen`, `DisplayNameScreen`, `AvatarScreen` integrated with FastAPI REST.
+- JWT persisted to `localStorage`, session restored on mount via `GET /api/auth/me`.
+
+### Frontend — Milestone 9: Chat API Integration (✅ Complete)
+Location: `frontend/lib/chatService.ts`, `frontend/contexts/ChatContext.tsx`
+
+**New files:**
+- `lib/chatService.ts` — typed wrappers for `GET /api/conversations`, `GET /api/conversations/{id}/messages`, `POST /api/conversations/{id}/messages`. All backend→frontend type mapping (snake_case→camelCase, DM name resolution, `isOwn` derivation, message status derivation from `statuses[]`) lives here.
+- `contexts/ChatContext.tsx` — global state: `conversations`, per-conversation `messages` cache, `loadingConversations`, `loadingMessages`, `sendingMessage`, `conversationsError`, `messagesError`. Actions: `loadConversations()`, `selectConversation(id)`, `sendMessage(id, content)` (optimistic).
+
+**Modified files:**
+- `app/page.tsx` — no more `mockData`; wraps `<ChatProvider>` around authenticated UI; `loadConversations()` on mount; `selectConversation(id)` on conversation click.
+- `components/layout/AppLayout.tsx` — threads `onSendMessage`, `loadingMessages`, `loadingConversations`, `conversationsError` to children.
+- `components/chat/ChatWindow.tsx` — shows `Loader2` spinner while messages load; passes `onSend` to `MessageComposer`.
+- `components/chat/MessageComposer.tsx` — accepts `onSend` prop; optimistic draft clear; disabled while sending.
+- `components/sidebar/Sidebar.tsx` — animated skeleton rows while loading; inline error banner on fetch failure.
+
+### Backend Fix — Milestone 9.5: Welcome Conversation on Registration (✅ Complete)
+Location: `backend/app/services/auth_service.py`
+
+**Problem:** `GET /api/conversations` returned `[]` for newly registered users because
+they were never added to any `conversation_members` row.
+
+**Fix:** Added `_bootstrap_welcome_conversation(db, new_user)` private function.
+Called in `register_user()` after the user is committed. Creates a DM with seed
+user alice (`user-alice-001`) using existing `get_or_create_dm()` + sends a welcome
+message using existing `send_message()`. Wrapped in try/except; skips silently if
+alice doesn't exist (unseeded DB).
+
+**No new endpoints. No dev-only routes. No frontend changes.**
 
 ### Hydration fixes
-- `frontend/data/mockData.ts` — uses `BASE_TIME = "2024-01-01T12:00:00Z"` (deterministic, not `Date.now()`)
-- `frontend/lib/utils.ts` — all `toLocale*` calls use `"en-GB"` locale and `timeZone: "UTC"`
+- `frontend/lib/utils.ts` — all `toLocale*` calls use `"en-GB"` locale and `timeZone: "UTC"`.
 
 ---
 
 ## 3. What remains (your task)
 
-### Milestone 8: Frontend Auth API Integration (✅ Complete)
-- `AuthContext` implemented and manages session state via `localStorage`.
-- `LoginScreen`, `RegisterScreen`, `OtpScreen`, `DisplayNameScreen`, and `AvatarScreen` successfully integrated with FastAPI REST endpoints.
-- Protected routing set up in `app/page.tsx`.
-- User avatar and Logout button integrated into `SidebarHeader`.
-- Added loading spinners and error handling UI for API calls.
+### Milestone 10: WebSocket Client
 
-### Milestone 9: Frontend Chat API Integration
-
-Replace all mock/dummy chat data with real API calls.
-
-#### Step 1 — Replace mock conversations
-- `GET /api/conversations` → replace `mockConversations`
-- `GET /api/conversations/{id}/messages` → replace `mockMessages[id]`
-
-#### Step 2 — WebSocket Client
 Create `frontend/contexts/WebSocketContext.tsx`:
-- Connects to `ws://localhost:8000/ws?token=<jwt>`
+- Connects to `ws://localhost:8000/ws?token=<jwt>` using the token from `AuthContext`.
 - Handles inbound frame types: `message`, `typing`, `typing_stop`, `read_receipt`, `delivery_receipt`, `presence`
-- Exposes `sendMessage(conversationId, content)` action
-- Updates conversation/message state reactively
-
-
+- On `message` event: prepend to `ChatContext.messages[conversationId]` and update conversation preview.
+- On `presence` event: update `isOnline` on the relevant conversation.
+- Exposes `sendWsMessage(conversationId, content)` action (replaces REST send for real-time).
+- Auto-reconnects on drop with exponential back-off.
 
 ---
 
-## 4. Files that MUST NOT be modified
+## 4. Files that MUST NOT be modified going forward
 
-- `backend/` — entire directory is locked. Read-only.
+- `backend/` — entire directory is locked **except for already-completed fixes**.
+  - `backend/app/services/auth_service.py` was modified for Milestone 9.5 (welcome DM).
 - `frontend/components/layout/AppLayout.tsx` — do not redesign.
 - `frontend/components/sidebar/*` — do not redesign.
 - `frontend/components/chat/*` — do not redesign.
 - `frontend/components/ui/*` — do not redesign.
-- `frontend/data/mockData.ts` — keep deterministic `BASE_TIME`; replace with API data.
+- `frontend/data/mockData.ts` — keep for reference; not used in the app.
 - `frontend/lib/utils.ts` — keep `"en-GB"` locale + UTC pinning.
 
 ---
@@ -99,16 +104,34 @@ Create `frontend/contexts/WebSocketContext.tsx`:
 ## 5. Backend API base URL
 ```
 http://localhost:8000
+ws://localhost:8000
 ```
-All endpoints are documented in `CLAUDE_CONTEXT.md` under "API Summary".
 
-Key request/response shapes:
-- `POST /api/auth/login` → `{ phone_number, password }` → `{ access_token, token_type }`
-- `POST /api/auth/register` → `{ phone_number, username, password }` → `{ access_token, token_type }`
-- `POST /api/auth/verify-otp` → `{ code: "123456" }` → `{ verified: true }`
-- `GET /api/auth/me` → `{ id, username, display_name, phone_number, avatar_url, is_online, last_seen_at }`
-- `GET /api/conversations` → array of conversation objects with unread counts
-- `GET /api/conversations/{id}/messages?limit=50` → paginated messages (cursor-based)
+### WebSocket endpoint
+```
+ws://localhost:8000/ws?token=<jwt>
+```
+
+### Inbound WS frame types
+```json
+// message
+{ "type": "message", "message": { ...MessageOut } }
+
+// typing
+{ "type": "typing", "conversation_id": "uuid", "user_id": "uuid" }
+
+// typing_stop
+{ "type": "typing_stop", "conversation_id": "uuid", "user_id": "uuid" }
+
+// read_receipt
+{ "type": "read_receipt", "conversation_id": "uuid", "user_id": "uuid", "last_read_message_id": "uuid", "timestamp": "iso" }
+
+// delivery_receipt
+{ "type": "delivery_receipt", "conversation_id": "uuid", "user_id": "uuid", "message_id": "uuid", "timestamp": "iso" }
+
+// presence
+{ "type": "presence", "user_id": "uuid", "is_online": bool, "last_seen_at": "iso | null" }
+```
 
 Bearer token header format:
 ```
@@ -117,16 +140,10 @@ Authorization: Bearer <access_token>
 
 ---
 
-## 6. Technical debt to address
-
-- Currently none recorded for the frontend since auth flow spinners and dynamic avatar initial are completed. Backend testing coverage is partial.
-
----
-
-## 7. Confirm before starting
+## 6. Confirm before starting
 
 Before writing any code, confirm you have read all four documentation files and understand:
 1. The backend is read-only.
-2. The auth flow is completely integrated with the backend API.
-3. The remaining task is to integrate the real Chat API and WebSockets.
+2. Auth and Chat REST API are fully integrated.
+3. The remaining task is the WebSocket client (Milestone 10).
 4. No redesigns of existing components.

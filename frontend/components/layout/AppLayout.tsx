@@ -9,6 +9,10 @@ interface AppLayoutProps {
   messages: Message[];
   onSelectConversation: (id: string) => void;
   onBack: () => void;
+  onSendMessage: (conversationId: string, content: string) => Promise<void>;
+  loadingConversations: boolean;
+  loadingMessages: boolean;
+  conversationsError: string | null;
 }
 
 /**
@@ -31,6 +35,10 @@ export default function AppLayout({
   messages,
   onSelectConversation,
   onBack,
+  onSendMessage,
+  loadingConversations,
+  loadingMessages,
+  conversationsError,
 }: AppLayoutProps) {
   const conversationOpen = selectedConversationId !== null;
 
@@ -47,6 +55,8 @@ export default function AppLayout({
           conversations={conversations}
           selectedId={selectedConversationId}
           onSelect={onSelectConversation}
+          isLoading={loadingConversations}
+          error={conversationsError}
         />
       </div>
 
@@ -61,6 +71,8 @@ export default function AppLayout({
           conversation={selectedConversation}
           messages={messages}
           onBack={onBack}
+          onSendMessage={onSendMessage}
+          isLoadingMessages={loadingMessages}
         />
       </div>
     </div>

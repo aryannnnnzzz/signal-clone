@@ -2,6 +2,7 @@
 Authentication service — JWT creation/validation, password hashing, mock OTP.
 """
 
+import logging
 from datetime import datetime, timedelta, timezone
 
 import bcrypt
@@ -11,6 +12,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.models.user import User
+
+logger = logging.getLogger(__name__)
+
+# Stable ID of the seeded "alice" user (see app/seed.py).
+# Used to create an initial welcome DM for every new registrant so that
+# GET /api/conversations returns at least one conversation immediately.
+_SEED_ALICE_ID = "user-alice-001"
 
 
 def hash_password(password: str) -> str:
@@ -36,6 +44,68 @@ def create_access_token(user_id: str) -> str:
     return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
 
 
+async def _bootstrap_welcome_conversation(db: AsyncSession, new_user: User) -> None:
+    """
+    Create a welcome conversation for a newly registered user.
+
+    If the seed user alice (user-alice-001) exists in the database, a DM is
+    opened between alice and the new user and alice sends a greeting message.
+    This mirrors how production messaging apps (Telegram, Signal) surface a
+    "System" or "Welcome" message for brand-new accounts.
+
+    If the database has not been seeded (alice absent), the function returns
+    silently — registration still succeeds and the user can create their own
+    conversations via the UI.
+    """
+    # Import here to avoid circular dependencies at module level
+    from app.services import conversation_service, message_service
+
+    try:
+        # Check whether the seed user exists
+        result = await db.execute(select(User).where(User.id == _SEED_ALICE_ID))
+        alice = result.scalar_one_or_none()
+
+        if alice is None:
+            # Unseeded database — skip gracefully
+            logger.info(
+                "Seed user alice not found; skipping welcome conversation for %s",
+                new_user.username,
+            )
+            return
+
+        # Create (or retrieve idempotently) a DM between alice and the new user
+        dm = await conversation_service.get_or_create_dm(
+            db=db,
+            user_id=_SEED_ALICE_ID,
+            other_user_id=new_user.id,
+        )
+
+        # Send a welcome message from alice
+        await message_service.send_message(
+            db=db,
+            conversation_id=dm.id,
+            sender_id=_SEED_ALICE_ID,
+            content=(
+                f"👋 Welcome to Signal Clone, {new_user.display_name}! "
+                "This is Alice from the demo team. Feel free to send me a message — "
+                "I'm here to help you explore the app. You can also search for other "
+                "users (bob, charlie, diana, eve) and start a conversation!"
+            ),
+            content_type="text",
+        )
+
+        logger.info(
+            "Created welcome DM (id=%s) for new user %s", dm.id, new_user.username
+        )
+
+    except Exception:
+        # Never let a failed welcome message block registration
+        logger.exception(
+            "Failed to create welcome conversation for user %s — registration continues",
+            new_user.username,
+        )
+
+
 async def register_user(
     db: AsyncSession,
     username: str,
@@ -45,7 +115,12 @@ async def register_user(
 ) -> tuple[User, str]:
     """
     Register a new user. Returns (user, access_token).
-    Raises ValueError if username already exists.
+
+    After the user row is persisted, automatically creates a welcome DM with
+    the seed user alice so that GET /api/conversations immediately returns at
+    least one conversation for the new account.
+
+    Raises ValueError if username or phone number already exists.
     """
     # Check uniqueness
     result = await db.execute(select(User).where(User.username == username))
@@ -68,6 +143,10 @@ async def register_user(
     db.add(user)
     await db.commit()
     await db.refresh(user)
+
+    # Automatically create a welcome conversation so the new user's
+    # GET /api/conversations is never empty on first login.
+    await _bootstrap_welcome_conversation(db, user)
 
     token = create_access_token(user.id)
     return user, token

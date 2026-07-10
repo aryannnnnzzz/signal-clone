@@ -50,15 +50,29 @@ The application utilises a layered, client-server architecture:
   - Protected routing: guests see AuthFlow, authenticated users see Chat UI.
   - Real user avatar and logout flow implemented in SidebarHeader.
 
+✅ **Chat REST API Integration (Milestone 9):**
+  - `lib/chatService.ts` — typed fetch wrappers for conversations and messages with full backend→frontend type mapping.
+  - `contexts/ChatContext.tsx` — global state for conversation list, per-conversation message cache, loading and error states per action.
+  - Optimistic message send: draft cleared immediately; message appended to UI; replaced by server response on success.
+  - Sidebar shows animated skeleton rows while conversations load; inline error banner on failure.
+  - ChatWindow shows a centered `Loader2` spinner while messages load.
+  - MessageComposer wired to real send API; disabled while in flight.
+
+✅ **Welcome Conversation on Registration (Milestone 9.5):**
+  - `auth_service.register_user()` now calls `_bootstrap_welcome_conversation()` after account creation.
+  - Opens a DM with seed user alice using the existing `get_or_create_dm()` service.
+  - Posts a welcome message from alice using `send_message()`.
+  - No new endpoints, no dev-only routes, no frontend changes.
+  - Gracefully skips if database is unseeded.
+
 ## Pending Features
-❌ **Chat API Integration:** Connect chat UI to FastAPI REST endpoints (`/api/conversations`).
 ❌ **WebSocket Client:** Real-time messages, presence, typing indicators.
 ❌ **Deployment:** Host frontend on Vercel, backend on Render/Railway.
 ❌ **README:** Comprehensive documentation.
 
 ## Current Progress
-**~65% Complete.**
-The entire backend and frontend UI shell are fully built. The next phase connects them together via REST APIs and WebSockets.
+**~82% Complete.**
+The entire backend and full frontend (auth + chat REST API) are built and connected. New users immediately see a welcome DM from Alice on first login. The next phase adds real-time capabilities via WebSocket.
 
 ## Next Milestone
-**Milestone 9: Frontend Chat API Integration** — Replace mock conversations and messages with real API data. Connect conversations and messages to the live backend.
+**Milestone 10: WebSocket Client** — Create `frontend/contexts/WebSocketContext.tsx`. Connect to `ws://localhost:8000/ws`. Handle inbound events (messages, typing, presence, receipts) and update ChatContext reactively.

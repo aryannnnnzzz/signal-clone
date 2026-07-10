@@ -57,12 +57,14 @@ from app.api.users import router as users_router  # noqa: E402
 from app.api.contacts import router as contacts_router  # noqa: E402
 from app.api.conversations import router as conversations_router  # noqa: E402
 from app.api.messages import router as messages_router  # noqa: E402
+from app.api.dev import router as dev_router  # noqa: E402  — dev-only helpers
 
 app.include_router(auth_router)
 app.include_router(users_router)
 app.include_router(contacts_router)
 app.include_router(conversations_router)
 app.include_router(messages_router)
+app.include_router(dev_router)  # dev-only: seed helpers for local development
 
 
 @app.get("/health")

@@ -1,33 +1,30 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import AppLayout from "@/components/layout/AppLayout";
 import AuthFlow from "@/components/auth/AuthFlow";
 import { useAuth } from "@/contexts/AuthContext";
-import { mockConversations, mockMessages } from "@/data/mockData";
-import { Conversation, Message } from "@/types";
+import { ChatProvider, useChat } from "@/contexts/ChatContext";
 
 /**
  * Application entry point.
  *
  * Routing logic:
- *   1. While session is restoring  → full-screen loading spinner
- *   2. Not authenticated           → <AuthFlow> (Milestone 2 UI, now wired to API)
- *   3. Authenticated               → <AppLayout> (existing chat shell)
+ *   1. While session is restoring → full-screen loading spinner
+ *   2. Not authenticated          → <AuthFlow>
+ *   3. Authenticated              → <ChatProvider> → <ChatApp>
  *
- * The chat shell still uses mock data (Milestone 4 will replace it with
- * real API data). Auth is now fully real.
+ * ChatProvider is rendered only when authenticated so it can safely
+ * call useAuth() and start loading conversations immediately.
  */
 export default function Home() {
   const { isAuthenticated, isLoading } = useAuth();
-  const [selectedId, setSelectedId] = useState<string | null>(null);
 
   /* ── Session restore loading state ──────────────── */
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-signal-chat">
         <div className="flex flex-col items-center gap-4">
-          {/* Simple animated dots spinner */}
           <div className="flex gap-2" aria-label="Loading" role="status">
             {[0, 1, 2].map((i) => (
               <span
@@ -50,22 +47,59 @@ export default function Home() {
     return <AuthFlow />;
   }
 
-  /* ── Main chat UI (still using mock data for now) ── */
-  const selectedConversation: Conversation | null =
-    mockConversations.find((c) => c.id === selectedId) ?? null;
+  /* ── Main chat UI with real API data ─────────────── */
+  return (
+    <ChatProvider>
+      <ChatApp />
+    </ChatProvider>
+  );
+}
 
-  const messages: Message[] = selectedId
-    ? (mockMessages[selectedId] ?? [])
-    : [];
+/**
+ * Inner component rendered only when authenticated.
+ * Owns conversation selection state and triggers API calls via ChatContext.
+ */
+function ChatApp() {
+  const {
+    conversations,
+    messages,
+    loadingConversations,
+    loadingMessages,
+    conversationsError,
+    loadConversations,
+    selectConversation,
+    sendMessage,
+  } = useChat();
+
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+
+  useEffect(() => {
+    loadConversations();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleSelectConversation = async (id: string) => {
+    setSelectedId(id);
+    await selectConversation(id);
+  };
+
+  const selectedConversation =
+    conversations.find((c) => c.id === selectedId) ?? null;
+
+  const currentMessages = selectedId ? (messages[selectedId] ?? []) : [];
 
   return (
     <AppLayout
-      conversations={mockConversations}
+      conversations={conversations}
       selectedConversationId={selectedId}
       selectedConversation={selectedConversation}
-      messages={messages}
-      onSelectConversation={setSelectedId}
+      messages={currentMessages}
+      onSelectConversation={handleSelectConversation}
       onBack={() => setSelectedId(null)}
+      onSendMessage={sendMessage}
+      loadingConversations={loadingConversations}
+      loadingMessages={loadingMessages}
+      conversationsError={conversationsError}
     />
   );
 }
