@@ -7,11 +7,12 @@ export const currentUser: User = {
   displayName: "Alice Walker",
   phoneNumber: "+1 (555) 234-5678",
   isOnline: true,
-  lastSeenAt: new Date().toISOString(),
+  lastSeenAt: new Date("2024-01-01T12:00:00Z").toISOString(),
 };
 
 /* ─── Helpers ────────────────────────────────────────────── */
-const now = Date.now();
+const BASE_TIME = "2024-01-01T12:00:00Z";
+const now = new Date(BASE_TIME).getTime();
 const t = {
   mins: (n: number) => new Date(now - n * 60_000).toISOString(),
   hours: (n: number) => new Date(now - n * 3_600_000).toISOString(),

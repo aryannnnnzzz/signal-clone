@@ -4,6 +4,10 @@
  * - Yesterday     → "Yesterday"
  * - This week     → "Mon" / "Tue" etc.
  * - Older         → "12/07/25"
+ *
+ * Uses explicit locale ("en-GB") and timeZone ("UTC") so the output is
+ * identical on the server (Node.js) and on the client browser, regardless
+ * of the system locale or timezone — preventing hydration mismatches.
  */
 export function formatSidebarTimestamp(isoString: string): string {
   const date = new Date(isoString);
@@ -13,37 +17,47 @@ export function formatSidebarTimestamp(isoString: string): string {
   const diffDays = Math.floor(diffMs / 86_400_000);
 
   if (diffDays === 0) {
-    return date.toLocaleTimeString([], {
+    return date.toLocaleTimeString("en-GB", {
       hour: "2-digit",
       minute: "2-digit",
       hour12: false,
+      timeZone: "UTC",
     });
   }
   if (diffDays === 1) return "Yesterday";
   if (diffDays < 7) {
-    return date.toLocaleDateString([], { weekday: "short" });
+    return date.toLocaleDateString("en-GB", {
+      weekday: "short",
+      timeZone: "UTC",
+    });
   }
-  return date.toLocaleDateString([], {
+  return date.toLocaleDateString("en-GB", {
     day: "2-digit",
     month: "2-digit",
     year: "2-digit",
+    timeZone: "UTC",
   });
 }
 
 /**
  * Format an ISO timestamp for display inside a message bubble.
  * Always returns "HH:MM" in 24-hour format.
+ *
+ * Explicit locale and timeZone prevent SSR/client hydration mismatches.
  */
 export function formatMessageTime(isoString: string): string {
-  return new Date(isoString).toLocaleTimeString([], {
+  return new Date(isoString).toLocaleTimeString("en-GB", {
     hour: "2-digit",
     minute: "2-digit",
     hour12: false,
+    timeZone: "UTC",
   });
 }
 
 /**
  * Build the date separator label shown between message groups.
+ *
+ * Explicit locale and timeZone prevent SSR/client hydration mismatches.
  */
 export function getDateLabel(isoString: string): string {
   const date = new Date(isoString);
@@ -54,10 +68,11 @@ export function getDateLabel(isoString: string): string {
 
   if (diffDays === 0) return "Today";
   if (diffDays === 1) return "Yesterday";
-  return date.toLocaleDateString([], {
+  return date.toLocaleDateString("en-GB", {
     weekday: "long",
     month: "long",
     day: "numeric",
+    timeZone: "UTC",
   });
 }
 
