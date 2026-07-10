@@ -70,3 +70,15 @@ html, body {
 .conversation-item {
   transition: background-color 0.12s ease;
 }
+
+/* ─── Auth screen entrance animation ─────────────────── */
+@keyframes authEnter {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

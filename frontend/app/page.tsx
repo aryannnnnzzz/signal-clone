@@ -2,20 +2,29 @@
 
 import { useState } from "react";
 import AppLayout from "@/components/layout/AppLayout";
+import AuthFlow from "@/components/auth/AuthFlow";
 import { mockConversations, mockMessages } from "@/data/mockData";
 import { Conversation, Message } from "@/types";
 
 /**
  * Application entry point.
  *
- * Owns the single piece of UI state: which conversation is currently selected.
- * All child components receive the selected conversation and its messages
- * as props — no global state management required for Milestone 1.
+ * Auth state is mock — no tokens, no API calls.
  *
- * In Milestone 3, this will be replaced by data fetched from the backend API.
+ * Flow:
+ *   1. Renders <AuthFlow> until the user completes onboarding.
+ *   2. Once onComplete fires, switches to the existing <AppLayout>.
+ *
+ * This keeps Milestone 2 (auth UI) and Milestone 1 (chat UI) completely
+ * decoupled. AppLayout is not modified at all.
  */
 export default function Home() {
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+
+  if (!isAuthenticated) {
+    return <AuthFlow onComplete={() => setIsAuthenticated(true)} />;
+  }
 
   const selectedConversation: Conversation | null =
     mockConversations.find((c) => c.id === selectedId) ?? null;

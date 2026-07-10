@@ -2,7 +2,7 @@
 **Assignment:** Build a functional clone of the Signal messaging application that replicates Signal's design, user experience, and core messaging workflows.
 **Overall Goal:** Deliver a real-time, privacy-focused messaging application supporting one-on-one and group chats, mock authentication, contacts, message persistence, typing indicators, and read/delivery receipts. The UI should closely resemble the Signal Messenger application.
 **Tech Stack:** 
-- **Frontend:** Next.js (TypeScript) + TailwindCSS (planned)
+- **Frontend:** Next.js 15 (TypeScript) + TailwindCSS v4
 - **Backend:** Python with FastAPI
 - **Database:** SQLite (with SQLAlchemy 2.0 and Alembic)
 - **Real-time:** WebSockets
@@ -10,11 +10,43 @@
 ---
 
 # Current Project Status
-- **Overall completion:** ~50%
+- **Overall completion:** ~65%
 - **Backend completion:** 100% (Fully tested and verified)
-- **Frontend completion:** 0% (Empty directory)
+- **Frontend completion:** ~35% (Auth UI + Chat UI shell complete; API integration pending)
 - **Deployment completion:** 0%
 - **README completion:** 0%
+
+---
+
+# What Was Built This Session (Milestone 2 — Auth UI)
+
+## New Files Created
+```
+frontend/components/auth/
+├── AuthFlow.tsx         ← Orchestrator: manages screen transitions
+├── AuthContainer.tsx    ← Shared animated wrapper card
+├── SignalLogo.tsx       ← Inline SVG Signal logo (gradient circle + bubble)
+├── AuthBackButton.tsx   ← Reusable ← back button with hover animation
+├── AuthInput.tsx        ← Reusable input: dark styled, error state, eye toggle
+├── WelcomeScreen.tsx    ← First screen: brand, tagline, Login/Register CTAs
+├── LoginScreen.tsx      ← Phone + password form, client-side validation
+├── RegisterScreen.tsx   ← Phone + username + password + confirm, validation
+├── OtpScreen.tsx        ← 6-digit OTP inputs, paste, countdown, mock verify
+├── DisplayNameScreen.tsx← Name input with 64-char counter
+└── AvatarScreen.tsx     ← Color swatches, drag-and-drop upload, preview
+```
+
+## Modified Files
+```
+frontend/app/page.tsx       ← Added isAuthenticated gate; renders AuthFlow first
+frontend/app/globals.css    ← Added @keyframes authEnter animation
+```
+
+## Auth Flow Sequence
+```
+Welcome → Login → OTP → DisplayName → Avatar → Chat App
+Welcome → Register → OTP → DisplayName → Avatar → Chat App
+```
 
 ---
 
@@ -27,11 +59,11 @@
 - **Migrations:** Alembic
 - **Validation:** Pydantic v2
 
-## Frontend Architecture (Planned)
-- **Framework:** Next.js with React
+## Frontend Architecture
+- **Framework:** Next.js 15 App Router
 - **Language:** TypeScript
-- **Styling:** TailwindCSS
-- **State Management:** Context API or Redux (to manage WebSockets and messages)
+- **Styling:** TailwindCSS v4 (`@import "tailwindcss"` / `@theme inline`)
+- **State:** Local `useState` only — no global state (correct for Milestones 1–2)
 
 ## Layered Architecture
 1. **API/Routers (`app/api/`)**: Handle HTTP requests/responses, authorization, and route to services.
@@ -60,7 +92,35 @@ backend/
 ├── alembic.ini             # Alembic configuration
 ├── requirements.txt        # Pinned Python dependencies
 └── signal_clone.db         # The SQLite database
-frontend/                   # (Currently empty) Target for Next.js app
+
+frontend/
+├── app/
+│   ├── globals.css         # TailwindCSS v4 theme + base + auth animation
+│   ├── layout.tsx          # Root layout (Inter font, body styles)
+│   └── page.tsx            # Entry: AuthFlow gate → AppLayout
+├── components/
+│   ├── auth/               # ← NEW: 11 auth UI components
+│   │   ├── AuthFlow.tsx
+│   │   ├── AuthContainer.tsx
+│   │   ├── SignalLogo.tsx
+│   │   ├── AuthBackButton.tsx
+│   │   ├── AuthInput.tsx
+│   │   ├── WelcomeScreen.tsx
+│   │   ├── LoginScreen.tsx
+│   │   ├── RegisterScreen.tsx
+│   │   ├── OtpScreen.tsx
+│   │   ├── DisplayNameScreen.tsx
+│   │   └── AvatarScreen.tsx
+│   ├── chat/               # MessageArea, MessageBubble, MessageComposer, ChatHeader
+│   ├── layout/             # AppLayout
+│   ├── sidebar/            # Sidebar, ConversationList, ConversationListItem
+│   └── ui/                 # Avatar, StatusIcon, EmptyState
+├── data/
+│   └── mockData.ts         # Deterministic mock conversations & messages
+├── lib/
+│   └── utils.ts            # Date formatting with pinned en-GB locale + UTC
+└── types/
+    └── index.ts            # TypeScript interfaces
 ```
 
 ---
@@ -132,6 +192,7 @@ frontend/                   # (Currently empty) Target for Next.js app
 - **Registration & Login:** User provides username/password, backend generates bcrypt hash. If valid, issues a JWT valid for 24 hours.
 - **OTP:** `POST /verify-otp` always returns verified for code `123456`.
 - **Protected Routes:** Use FastAPI `Depends(get_current_user)` to extract Bearer token, decode JWT, and return the `User` ORM model.
+- **Frontend Mock:** Auth flow is fully UI-only. `isAuthenticated` is a local `useState` boolean in `page.tsx`.
 
 ---
 
@@ -160,6 +221,8 @@ frontend/                   # (Currently empty) Target for Next.js app
 - Ephemeral typing indicators.
 - Online/offline presence broadcasting.
 - Database seeding with mock data.
+- **[NEW] Complete multi-step authentication UI flow (6 screens).**
+- **[NEW] Chat UI shell with 21 components, responsive, Signal-faithful design.**
 
 ---
 
@@ -173,19 +236,23 @@ All the following features have been manually tested against the running server 
 - ✅ GET `/api/auth/me` verified
 - ✅ GET `/api/conversations` verified
 - ✅ SQLite verified
+- ✅ Frontend builds: `✓ Compiled successfully` (zero TS/lint errors)
+- ✅ Auth flow renders all 6 screens correctly
+- ✅ OTP screen mock code `123456` verified
+- ✅ Avatar upload (drag-and-drop + file select) verified
+- ✅ No hydration errors (deterministic timestamps + pinned en-GB locale)
 
 ---
 
 # Pending Features
-- [ ] **Frontend**: Initialize Next.js project.
-- [ ] **Signal UI**: Implement pixel-perfect Signal Messenger clone layout (sidebar, chat area, message bubbles).
-- [ ] **API Integration**: Connect frontend to backend REST APIs using dummy data initially.
-- [ ] **WebSocket Integration**: Connect frontend to `/ws` for real-time messaging, presence, and receipts.
+- [ ] **Frontend API Integration**: Replace mock data with `fetch` calls to backend endpoints.
+- [ ] **WebSocket Client**: Connect frontend to `/ws` for real-time messaging, presence, typing indicators.
+- [ ] **Auth Token Storage**: On real login/register, store JWT in `localStorage` or `httpOnly` cookie.
+- [ ] **Protected Route Guard**: Redirect unauthenticated users to Welcome screen.
 - [ ] **Real-time chat testing**: Verify end-to-end messaging flow in the browser.
-- [ ] **Responsive UI**: Ensure it works on mobile, tablet, and desktop.
+- [ ] **Responsive UI**: Audit on mobile, tablet, and desktop.
 - [ ] **Deployment**: Deploy frontend to Vercel/Netlify, backend to Render/Railway.
 - [ ] **README**: Write comprehensive documentation.
-- [ ] **Final Polish**: Micro-animations, dark mode (optional but good).
 
 ---
 
@@ -199,6 +266,8 @@ All the following features have been manually tested against the running server 
 - **Why `message_status` junction table?** A message sent to a 50-person group needs 49 delivery statuses. Embedding this in the `messages` table is impossible relationally.
 - **Why Service Layer?** Decouples business logic from HTTP transport, allowing WebSocket handlers and REST routes to invoke the same exact functions.
 - **Why Cursor Pagination?** Offset pagination skips or duplicates messages when new messages arrive. Cursor (using `created_at`) guarantees consistency.
+- **Why local useState for auth (not Context/Redux)?** Milestones 1–2 are pure UI scaffolding. Adding global state now would be premature. Global auth state will be introduced in Milestone 3 (API integration) when the JWT needs to be stored and shared.
+- **Why `AuthFlow` orchestrator pattern?** Keeps all navigation logic in one place; screens are pure presentational components that receive callbacks. Makes it trivial to swap mock navigation for real router navigation in Milestone 3.
 
 ---
 
@@ -208,36 +277,28 @@ All the following features have been manually tested against the running server 
 - **Service Conventions:** All DB interactions happen here. They take `db: AsyncSession` as the first argument.
 - **Router Conventions:** Dependency injection used heavily for `db` and `current_user`.
 - **Schema/Model separation:** SQLAlchemy models define persistence; Pydantic schemas define API contracts.
+- **Auth Component Convention:** Every auth screen receives only callbacks (`onSubmit`, `onBack`, etc.) — no shared state.
 
 ---
 
 # Known Issues
-- **Technical Debt:** The frontend is completely unbuilt. 
-- **TODOs:** Need to set up the Next.js scaffold and state management for WebSockets.
-- **Bug Fix Note:** `passlib` has a known bug with `bcrypt >= 4.1`. We bypassed it by using `bcrypt` directly in `auth_service.py`.
+- **Technical Debt:** Auth flow uses mock state only; needs real JWT integration in Milestone 3.
+- **AvatarScreen:** Uses the initial "A" as the preview letter — should derive from the `displayName` entered in the previous step. This can be fixed when converting to a real auth context.
+- **Hydration:** All timestamp formatting uses `"en-GB"` locale and `timeZone: "UTC"` — fully deterministic, no hydration issues.
 
 ---
 
 # Git Status
 - **Latest branch:** `main`
 - **Latest commit message:** `Complete backend scaffold and authentication`
-- **GitHub repository status:** Up to date with origin/main.
-- **Current milestone:** Backend completion.
+- **GitHub repository status:** Behind (Milestones 1+2 frontend not yet committed)
+- **Suggested commit for this session:**
+  ```
+  feat(frontend): implement Milestone 2 — authentication UI flow
+  ```
 
 ---
 
 # Next Milestone
-The next milestone is:
-Build the complete Signal Desktop frontend using Next.js + TypeScript + Tailwind using dummy data.
+**Milestone 3: Frontend API Integration** — Replace all mock/dummy data with real `fetch` calls to the FastAPI backend. Introduce a global auth context that stores the JWT and exposes `login`, `logout`, `register` actions. Gate every route with an auth check.
 **Backend must remain unchanged.**
-
----
-
-# Handoff Instructions
-**To the Next AI Session:**
-1. The **Backend** is 100% complete, verified, and strictly adheres to the schema/API defined above.
-2. **Do NOT regenerate, refactor, or modify the backend code.** Treat `backend/` as read-only.
-3. Your primary objective is to initialize the Next.js frontend in the `frontend/` directory.
-4. Begin by creating the UI components with hardcoded/dummy data that matches the Signal Messenger aesthetic.
-5. Once the UI is built, incrementally replace dummy data with API calls matching the Pydantic schemas listed in this document.
-6. The WebSocket architecture expects specific JSON frame types (listed in the WebSocket section). Ensure your frontend context matches this exactly.
