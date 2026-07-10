@@ -1,0 +1,3 @@
+"""
+Signal Clone Backend Application.
+"""

@@ -1,0 +1,21 @@
+# Python
+backend/venv/
+backend/__pycache__/
+*.pyc
+
+# Environment
+backend/.env
+
+# Node
+frontend/node_modules/
+frontend/.next/
+
+# Ignore Files folder
+files/
+
+# IDE
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
