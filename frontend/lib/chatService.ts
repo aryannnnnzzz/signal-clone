@@ -56,6 +56,13 @@ interface BackendMessageOut {
   content_type: string;
   content: string;
   reply_to_id: string | null;
+  reply_to: {
+    id: string;
+    sender_id: string | null;
+    sender: BackendUserOut | null;
+    content_type: string;
+    content: string;
+  } | null;
   created_at: string;
   statuses: BackendMessageStatusOut[];
 }
@@ -111,6 +118,17 @@ function deriveMessageStatus(
  */
 function mapMessage(raw: BackendMessageOut, currentUserId: string): Message {
   const isOwn = raw.sender_id === currentUserId;
+  let replyTo = undefined;
+  
+  if (raw.reply_to) {
+    replyTo = {
+      id: raw.reply_to.id,
+      senderName: raw.reply_to.sender?.display_name ?? "Unknown",
+      content: raw.reply_to.content,
+      contentType: raw.reply_to.content_type as Message["contentType"]
+    };
+  }
+
   return {
     id: raw.id,
     conversationId: raw.conversation_id,
@@ -121,6 +139,7 @@ function mapMessage(raw: BackendMessageOut, currentUserId: string): Message {
     status: deriveMessageStatus(raw.statuses, isOwn),
     createdAt: raw.created_at,
     isOwn,
+    replyTo,
   };
 }
 
@@ -223,13 +242,14 @@ export async function postMessage(
   conversationId: string,
   content: string,
   currentUserId: string,
-  contentType: "text" | "image" | "file" = "text"
+  contentType: "text" | "image" | "file" = "text",
+  replyToId?: string
 ): Promise<Message> {
   const raw = await apiRequest<BackendMessageOut>(
     `/api/conversations/${conversationId}/messages`,
     {
       method: "POST",
-      body: { content, content_type: contentType },
+      body: { content, content_type: contentType, reply_to_id: replyToId },
     }
   );
   return mapMessage(raw, currentUserId);

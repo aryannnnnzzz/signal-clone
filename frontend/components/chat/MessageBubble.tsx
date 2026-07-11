@@ -12,6 +12,8 @@ interface MessageBubbleProps {
    * Should be true only for received messages in group conversations.
    */
   showSenderName: boolean;
+  /** Called when user clicks reply */
+  onReply?: (msg: Message) => void;
 }
 
 /**
@@ -33,8 +35,9 @@ interface MessageBubbleProps {
 export default function MessageBubble({
   message,
   showSenderName,
+  onReply,
 }: MessageBubbleProps) {
-  const { isOwn, content, contentType, status, createdAt, senderName } = message;
+  const { id, isOwn, content, contentType, status, createdAt, senderName, replyTo } = message;
   const [isViewerOpen, setIsViewerOpen] = useState(false);
 
   let parsedContent = null;
@@ -51,8 +54,35 @@ export default function MessageBubble({
 
   const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
+  const scrollToMessage = (msgId: string) => {
+    const el = document.getElementById(`message-${msgId}`);
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+      el.classList.add("bg-signal-hover", "transition-colors", "duration-500");
+      setTimeout(() => el.classList.remove("bg-signal-hover"), 1500);
+    }
+  };
+
   return (
-    <div className={`flex ${isOwn ? "justify-end" : "justify-start"} mb-[3px]`}>
+    <div 
+      id={`message-${id}`}
+      className={`group flex items-center gap-2 mb-[3px] ${isOwn ? "justify-end" : "justify-start"}`}
+    >
+      {/* Reply Button (visible on hover) for sent messages (left of bubble) */}
+      {isOwn && onReply && (
+        <button
+          onClick={() => onReply(message)}
+          className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-full text-signal-secondary hover:text-signal-primary hover:bg-signal-hover flex-shrink-0"
+          aria-label="Reply"
+          title="Reply"
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="9 17 4 12 9 7" />
+            <path d="M20 18v-2a4 4 0 0 0-4-4H4" />
+          </svg>
+        </button>
+      )}
+
       <div
         className={`
           message-bubble relative px-3.5 py-2 rounded-[18px]
@@ -62,6 +92,29 @@ export default function MessageBubble({
           }
         `}
       >
+        {/* Quoted Message Preview */}
+        {replyTo && (
+          <div 
+            onClick={() => scrollToMessage(replyTo.id)}
+            className={`
+              mb-1.5 p-2 rounded-lg cursor-pointer transition-colors relative overflow-hidden
+              ${isOwn ? "bg-black/20 hover:bg-black/30 text-white/90" : "bg-black/10 hover:bg-black/20 text-signal-primary"}
+            `}
+          >
+            <div className={`absolute left-0 top-0 bottom-0 w-1 ${isOwn ? "bg-white/50" : "bg-signal-blue"} rounded-full`} />
+            <div className="pl-1.5 min-w-0">
+              <div className={`text-[12px] font-semibold truncate ${isOwn ? "text-white" : "text-signal-blue"}`}>
+                {replyTo.senderName}
+              </div>
+              <div className="text-[13px] truncate max-w-[250px] opacity-90">
+                {replyTo.contentType === "text" 
+                  ? replyTo.content 
+                  : (replyTo.contentType === "image" ? "📷 Image" : "📎 Attachment")}
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Sender name — group received messages only */}
         {showSenderName && !isOwn && (
           <p className="text-signal-blue text-[12px] font-semibold mb-0.5 leading-tight">
@@ -138,6 +191,21 @@ export default function MessageBubble({
           {isOwn && <StatusIcon status={status} size="sm" variant="onBlue" />}
         </div>
       </div>
+
+      {/* Reply Button (visible on hover) for received messages (right of bubble) */}
+      {!isOwn && onReply && (
+        <button
+          onClick={() => onReply(message)}
+          className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-full text-signal-secondary hover:text-signal-primary hover:bg-signal-hover flex-shrink-0"
+          aria-label="Reply"
+          title="Reply"
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="9 17 4 12 9 7" />
+            <path d="M20 18v-2a4 4 0 0 0-4-4H4" />
+          </svg>
+        </button>
+      )}
 
       {isViewerOpen && parsedContent && parsedContent.attachment && contentType === "image" && (
         <ImageViewer 

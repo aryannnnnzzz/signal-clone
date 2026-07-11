@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Conversation, Message } from "@/types";
 import ChatHeader from "./ChatHeader";
 import MessageArea from "./MessageArea";
@@ -9,7 +10,7 @@ interface ChatWindowProps {
   conversation: Conversation | null;
   messages: Message[];
   onBack: () => void;
-  onSendMessage: (conversationId: string, content: string, contentType?: "text" | "image" | "file") => Promise<void>;
+  onSendMessage: (conversationId: string, content: string, contentType?: "text" | "image" | "file", replyTo?: Message) => Promise<void>;
   isLoadingMessages: boolean;
   /** Users currently typing in the active conversation. */
   typers: { userId: string; displayName: string }[];
@@ -39,12 +40,16 @@ export default function ChatWindow({
   onTypingStart,
   onTypingStop,
 }: ChatWindowProps) {
+  const [replyingToMessage, setReplyingToMessage] = useState<Message | null>(null);
+
   if (!conversation) {
     return <EmptyState />;
   }
 
   const handleSend = async (content: string, contentType?: "text" | "image" | "file") => {
-    await onSendMessage(conversation.id, content, contentType);
+    const currentReply = replyingToMessage;
+    setReplyingToMessage(null); // Clear immediately
+    await onSendMessage(conversation.id, content, contentType, currentReply ?? undefined);
   };
 
   return (
@@ -64,6 +69,7 @@ export default function ChatWindow({
           messages={messages}
           conversationType={conversation.type}
           typers={typers}
+          onReply={(msg) => setReplyingToMessage(msg)}
         />
       )}
 
@@ -71,6 +77,8 @@ export default function ChatWindow({
         onSend={handleSend}
         onTypingStart={onTypingStart}
         onTypingStop={onTypingStop}
+        replyingToMessage={replyingToMessage}
+        onCancelReply={() => setReplyingToMessage(null)}
       />
     </main>
   );

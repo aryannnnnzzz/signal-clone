@@ -14,6 +14,8 @@ interface MessageComposerProps {
   onTypingStart: () => void;
   /** Called after 1 s of inactivity or immediately on send — send typing_stop. */
   onTypingStop: () => void;
+  replyingToMessage?: import("@/types").Message | null;
+  onCancelReply?: () => void;
 }
 
 interface AttachmentData {
@@ -35,7 +37,7 @@ interface AttachmentData {
  * Enter sends; Shift+Enter inserts a newline.
  * The send button is disabled while a message is being sent.
  */
-export default function MessageComposer({ onSend, onTypingStart, onTypingStop }: MessageComposerProps) {
+export default function MessageComposer({ onSend, onTypingStart, onTypingStop, replyingToMessage, onCancelReply }: MessageComposerProps) {
   const [draft, setDraft] = useState("");
   const [isSending, setIsSending] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -271,6 +273,32 @@ export default function MessageComposer({ onSend, onTypingStart, onTypingStop }:
            onDragLeave={() => setIsDragOver(false)}
            onDrop={handleDrop}>
         
+        {/* Reply Preview area */}
+        {replyingToMessage && (
+          <div className="p-3 border-b border-signal-border/50 relative group bg-signal-sidebar/30 flex items-start gap-3">
+            <button 
+              onClick={onCancelReply}
+              className="absolute top-2 right-2 p-1 bg-black/50 hover:bg-red-500 rounded-full text-white opacity-0 group-hover:opacity-100 transition-opacity z-10"
+              aria-label="Cancel reply"
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+            </button>
+            
+            <div className="w-1 h-full bg-signal-blue rounded-full absolute left-0 top-0 bottom-0"></div>
+            
+            <div className="flex-1 min-w-0 pl-1">
+              <div className="text-sm font-medium text-signal-blue mb-1 truncate">
+                Replying to {replyingToMessage.senderName}
+              </div>
+              <div className="text-sm text-signal-secondary truncate">
+                {replyingToMessage.contentType === "text" 
+                  ? replyingToMessage.content
+                  : (replyingToMessage.contentType === "image" ? "📷 Image" : "📎 Attachment")}
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Attachment Preview area */}
         {attachment && (
           <div className="p-3 border-b border-signal-border/50 relative group bg-signal-sidebar/30">

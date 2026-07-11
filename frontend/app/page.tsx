@@ -179,8 +179,8 @@ function ChatApp() {
    * Wraps ChatContext.sendMessage with the WS send function and connected state.
    * ChatContext will use WS if connected, REST POST if not.
    */
-  const handleSendMessage = async (conversationId: string, content: string, contentType?: "text" | "image" | "file") => {
-    await sendMessage(conversationId, content, sendWsMessage, isConnected, contentType);
+  const handleSendMessage = async (conversationId: string, content: string, contentType?: "text" | "image" | "file", replyTo?: import("@/types").Message) => {
+    await sendMessage(conversationId, content, sendWsMessage, isConnected, contentType, replyTo);
   };
 
   /**

@@ -79,9 +79,10 @@ interface ChatContextValue {
   sendMessage: (
     conversationId: string,
     content: string,
-    wsSend?: (convId: string, content: string, contentType?: "text" | "image" | "file") => void,
+    wsSend?: (convId: string, content: string, contentType?: "text" | "image" | "file", replyToId?: string) => void,
     wsConnected?: boolean,
-    contentType?: "text" | "image" | "file"
+    contentType?: "text" | "image" | "file",
+    replyTo?: Message
   ) => Promise<void>;
   /** Called by WebSocketContext when a `message` frame arrives. */
   receiveMessage: (payload: WsMessagePayload, currentUserId: string) => void;
@@ -128,6 +129,12 @@ function mapWsMessage(raw: WsMessagePayload, currentUserId: string): Message {
     status: isOwn ? "sent" : "delivered",
     createdAt: raw.created_at,
     isOwn,
+    replyTo: raw.reply_to ? {
+      id: raw.reply_to.id,
+      senderName: raw.reply_to.sender?.display_name ?? "Unknown",
+      content: raw.reply_to.content,
+      contentType: raw.reply_to.content_type as Message["contentType"],
+    } : undefined,
   };
 }
 
@@ -405,9 +412,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     async (
       conversationId: string,
       content: string,
-      wsSend?: (convId: string, content: string, contentType?: "text" | "image" | "file") => void,
+      wsSend?: (convId: string, content: string, contentType?: "text" | "image" | "file", replyToId?: string) => void,
       wsConnected?: boolean,
-      contentType: "text" | "image" | "file" = "text"
+      contentType: "text" | "image" | "file" = "text",
+      replyTo?: Message
     ) => {
       if (!user || !content.trim()) return;
 
@@ -423,6 +431,12 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         status: "sending",
         createdAt: new Date().toISOString(),
         isOwn: true,
+        replyTo: replyTo ? {
+          id: replyTo.id,
+          senderName: replyTo.senderName,
+          content: replyTo.content,
+          contentType: replyTo.contentType,
+        } : undefined,
       };
 
       // Append optimistic message immediately
@@ -439,7 +453,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
        * via the WS `message` frame — no spinner needed.
        */
       if (wsConnected && wsSend) {
-        wsSend(conversationId, content.trim(), contentType);
+        wsSend(conversationId, content.trim(), contentType, replyTo?.id);
         // Update sidebar preview optimistically
         setConversations((prev) =>
           prev.map((c) => {
@@ -475,7 +489,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
        */
       setSendingMessage(true);
       try {
-        const persisted = await postMessage(conversationId, content.trim(), user.id, contentType);
+        const persisted = await postMessage(conversationId, content.trim(), user.id, contentType, replyTo?.id);
 
         // Replace the optimistic message with the real one from the server
         setMessages((prev) => ({

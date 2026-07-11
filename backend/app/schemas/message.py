@@ -24,6 +24,16 @@ class MessageStatusOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class MessageReplyOut(BaseModel):
+    id: str
+    sender_id: str | None = None
+    sender: UserOut | None = None
+    content_type: str
+    content: str
+
+    model_config = {"from_attributes": True}
+
+
 class MessageOut(BaseModel):
     id: str
     conversation_id: str
@@ -32,6 +42,7 @@ class MessageOut(BaseModel):
     content_type: str
     content: str
     reply_to_id: str | None = None
+    reply_to: MessageReplyOut | None = None
     created_at: datetime
     statuses: list[MessageStatusOut] = []
 

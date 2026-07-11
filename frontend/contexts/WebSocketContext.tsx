@@ -53,6 +53,18 @@ export interface WsMessagePayload {
   content_type: string;
   content: string;
   reply_to_id: string | null;
+  reply_to: {
+    id: string;
+    sender_id: string | null;
+    sender: {
+      id: string;
+      display_name: string;
+      avatar_url: string | null;
+      is_online: boolean;
+    } | null;
+    content_type: string;
+    content: string;
+  } | null;
   created_at: string;
   statuses: { id: string; user_id: string; status: string; timestamp: string }[];
 }
@@ -98,7 +110,7 @@ interface WebSocketContextValue {
   /** Send an arbitrary JSON frame. No-op if not connected. */
   sendFrame: (frame: object) => void;
   /** Send a new_message frame for a conversation. */
-  sendWsMessage: (conversationId: string, content: string, contentType?: "text" | "image" | "file") => void;
+  sendWsMessage: (conversationId: string, content: string, contentType?: "text" | "image" | "file", replyToId?: string) => void;
   /** Send a typing_start frame — called by MessageComposer debounce. */
   sendTypingStart: (conversationId: string) => void;
   /** Send a typing_stop frame — called after 1s inactivity or on message send. */
@@ -316,12 +328,13 @@ export function WebSocketProvider({ token, children }: WebSocketProviderProps) {
   }, []);
 
   const sendWsMessage = useCallback(
-    (conversationId: string, content: string, contentType: "text" | "image" | "file" = "text") => {
+    (conversationId: string, content: string, contentType: "text" | "image" | "file" = "text", replyToId?: string) => {
       sendFrame({
         type: "new_message",
         conversation_id: conversationId,
         content,
         content_type: contentType,
+        reply_to_id: replyToId,
       });
     },
     [sendFrame]

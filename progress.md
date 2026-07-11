@@ -20,9 +20,21 @@
 - [x] **Milestone 13:** Settings
 - [x] **Milestone 13.5:** Settings Polish ← **JUST COMPLETED**
 - [x] **Milestone 14:** Attachments (Images, Documents, Drag & Drop)
+- [x] **Milestone 15:** Reply to Messages
 - [ ] **Milestone 12:** Deployment
 
 ## Recently Completed Work
+
+### **[Milestone 15]** Reply to Messages
+- **Backend:** Updated `MessageOut` schema to return a populated `reply_to` nested object to the frontend.
+- **Frontend Core:** Extended `Message` interface and `WsMessagePayload` to include `replyTo`.
+- **Frontend Core:** Wired `replyToId` payload through `sendMessage`, `sendWsMessage`, and `postMessage`.
+- **UI:** Added `replyingToMessage` state in `ChatWindow` to track active replies.
+- **UI:** Added "Replying to..." contextual bar in `MessageComposer` with an `X` cancel button.
+- **UI:** Added a hover-reveal Reply button (↩) to `MessageBubble`.
+- **UI:** Rendered a visually distinct inset quote above message bubbles for replies.
+- **UI:** Added `scrollToMessage` functionality when clicking on the quoted reply inset.
+- Production build verified: `✓ Compiled successfully` — zero TypeScript errors.
 
 ### **[Milestone 14]** Attachments (Images, Documents, Drag & Drop)
 - Implemented file upload input and drag-and-drop zone in `MessageComposer.tsx`.

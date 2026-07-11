@@ -41,6 +41,13 @@ export interface Message {
   createdAt: string;
   /** True when this message was sent by the current logged-in user */
   isOwn: boolean;
+  /** The message this message is replying to, if any */
+  replyTo?: {
+    id: string;
+    senderName: string;
+    content: string;
+    contentType: ContentType;
+  };
 }
 
 export interface Conversation {

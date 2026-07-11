@@ -11,6 +11,8 @@ interface MessageAreaProps {
   conversationType: ConversationType;
   /** Users currently typing in this conversation. */
   typers: { userId: string; displayName: string }[];
+  /** Called when user clicks reply on a message */
+  onReply?: (msg: Message) => void;
 }
 
 /**
@@ -25,6 +27,7 @@ export default function MessageArea({
   messages,
   conversationType,
   typers,
+  onReply,
 }: MessageAreaProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -61,6 +64,7 @@ export default function MessageArea({
             <MessageBubble
               message={message}
               showSenderName={showSenderName}
+              onReply={onReply}
             />
           </div>
         );
