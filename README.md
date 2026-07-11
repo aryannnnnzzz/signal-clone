@@ -84,16 +84,16 @@ Record and send voice notes directly from the browser.
 ### Message Editing
 Edit previously sent messages without deleting the conversation history.
 
-<p align="center">
-  <img src="screenshots/mobile_view.png" alt="Mobile View" width="350"/>
-</p>
+![Message Editing](screenshots/message_edit.png)
 
 ---
 
 ### Mobile Responsive Design
 Fully responsive interface optimized for mobile devices.
 
-![Mobile View](screenshots/mobile_view.png)
+<p align="center">
+  <img src="screenshots/mobile_view.png" alt="Mobile View" width="350"/>
+</p>
 
 ---
 
