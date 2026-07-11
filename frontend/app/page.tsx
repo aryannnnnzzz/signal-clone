@@ -5,6 +5,13 @@ import AppLayout from "@/components/layout/AppLayout";
 import AuthFlow from "@/components/auth/AuthFlow";
 import { useAuth } from "@/contexts/AuthContext";
 import { ChatProvider, useChat } from "@/contexts/ChatContext";
+import {
+  WebSocketProvider,
+  useWebSocket,
+  type WsMessagePayload,
+  type WsPresencePayload,
+  type WsTypingPayload,
+} from "@/contexts/WebSocketContext";
 
 /**
  * Application entry point.
@@ -12,13 +19,18 @@ import { ChatProvider, useChat } from "@/contexts/ChatContext";
  * Routing logic:
  *   1. While session is restoring → full-screen loading spinner
  *   2. Not authenticated          → <AuthFlow>
- *   3. Authenticated              → <ChatProvider> → <ChatApp>
+ *   3. Authenticated              → <ChatProvider> → <WebSocketProvider> → <ChatApp>
+ *
+ * Provider nesting order (inner depends on outer):
+ *   <ChatProvider>           — owns conversation + message state
+ *     <WebSocketProvider>    — manages WS connection; calls ChatContext actions
+ *       <ChatApp>            — reads both contexts
  *
  * ChatProvider is rendered only when authenticated so it can safely
  * call useAuth() and start loading conversations immediately.
  */
 export default function Home() {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading, token } = useAuth();
 
   /* ── Session restore loading state ──────────────── */
   if (isLoading) {
@@ -47,10 +59,12 @@ export default function Home() {
     return <AuthFlow />;
   }
 
-  /* ── Main chat UI with real API data ─────────────── */
+  /* ── Main chat UI with real-time WebSocket ─────────── */
   return (
     <ChatProvider>
-      <ChatApp />
+      <WebSocketProvider token={token}>
+        <ChatApp />
+      </WebSocketProvider>
     </ChatProvider>
   );
 }
@@ -58,6 +72,7 @@ export default function Home() {
 /**
  * Inner component rendered only when authenticated.
  * Owns conversation selection state and triggers API calls via ChatContext.
+ * Wires WebSocket callbacks to ChatContext actions.
  */
 function ChatApp() {
   const {
@@ -69,10 +84,35 @@ function ChatApp() {
     loadConversations,
     selectConversation,
     sendMessage,
+    receiveMessage,
+    updatePresence,
+    openNewChat,
   } = useChat();
+
+  const { isConnected, sendWsMessage, registerCallbacks } = useWebSocket();
+  const { user } = useAuth();
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
+  /* ── Register WS → ChatContext callbacks on mount ── */
+  useEffect(() => {
+    if (!user) return;
+
+    registerCallbacks({
+      onMessage: (payload: WsMessagePayload) => {
+        receiveMessage(payload, user.id);
+      },
+      onPresence: (payload: WsPresencePayload) => {
+        updatePresence(payload.user_id, payload.is_online);
+      },
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      onTyping: (_payload: WsTypingPayload, _isStop: boolean) => {
+        // Typing indicators — UI not yet implemented, silently handled
+      },
+    });
+  }, [user, registerCallbacks, receiveMessage, updatePresence]);
+
+  /* ── Load conversations on mount ─────────────────── */
   useEffect(() => {
     loadConversations();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -81,6 +121,26 @@ function ChatApp() {
   const handleSelectConversation = async (id: string) => {
     setSelectedId(id);
     await selectConversation(id);
+  };
+
+  /**
+   * Wraps ChatContext.sendMessage with the WS send function and connected state.
+   * ChatContext will use WS if connected, REST POST if not.
+   */
+  const handleSendMessage = async (conversationId: string, content: string) => {
+    await sendMessage(conversationId, content, sendWsMessage, isConnected);
+  };
+
+  /**
+   * Called when the user picks someone from the NewChatPanel search.
+   * 1. Calls ChatContext.openNewChat(userId) — creates/gets the DM via REST.
+   * 2. Auto-selects the returned conversation id.
+   */
+  const handleNewChat = async (userId: string) => {
+    const convId = await openNewChat(userId);
+    if (convId) {
+      await handleSelectConversation(convId);
+    }
   };
 
   const selectedConversation =
@@ -96,10 +156,11 @@ function ChatApp() {
       messages={currentMessages}
       onSelectConversation={handleSelectConversation}
       onBack={() => setSelectedId(null)}
-      onSendMessage={sendMessage}
+      onSendMessage={handleSendMessage}
       loadingConversations={loadingConversations}
       loadingMessages={loadingMessages}
       conversationsError={conversationsError}
+      onNewChat={handleNewChat}
     />
   );
 }

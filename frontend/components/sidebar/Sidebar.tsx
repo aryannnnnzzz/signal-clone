@@ -5,6 +5,7 @@ import { Conversation } from "@/types";
 import SidebarHeader from "./SidebarHeader";
 import SearchBar from "./SearchBar";
 import ConversationList from "./ConversationList";
+import NewChatPanel from "./NewChatPanel";
 
 interface SidebarProps {
   conversations: Conversation[];
@@ -12,14 +13,16 @@ interface SidebarProps {
   onSelect: (id: string) => void;
   isLoading: boolean;
   error: string | null;
+  /** Called with the chosen user id + display name to start a new DM. */
+  onNewChat: (userId: string, displayName: string) => void;
 }
 
 /**
  * Left sidebar containing the conversation header, search field,
  * and scrollable conversation list.
  *
- * Owns `searchQuery` state locally — no need to lift it since
- * the filtering logic lives here.
+ * Owns `searchQuery` state for filtering conversations locally and
+ * `newChatOpen` state for toggling the NewChatPanel overlay.
  *
  * Shows a skeleton loader while conversations are fetching and an
  * inline error banner if the fetch fails.
@@ -30,8 +33,10 @@ export default function Sidebar({
   onSelect,
   isLoading,
   error,
+  onNewChat,
 }: SidebarProps) {
   const [searchQuery, setSearchQuery] = useState("");
+  const [newChatOpen, setNewChatOpen] = useState(false);
 
   const filtered =
     searchQuery.trim() === ""
@@ -45,10 +50,10 @@ export default function Sidebar({
 
   return (
     <aside
-      className="flex flex-col w-80 min-w-[280px] h-full bg-signal-sidebar border-r border-signal-border flex-shrink-0"
+      className="relative flex flex-col w-80 min-w-[280px] h-full bg-signal-sidebar border-r border-signal-border flex-shrink-0"
       aria-label="Conversations sidebar"
     >
-      <SidebarHeader />
+      <SidebarHeader onNewChat={() => setNewChatOpen(true)} />
       <SearchBar value={searchQuery} onChange={setSearchQuery} />
 
       {/* ── Loading state ─────────────────────────────── */}
@@ -94,6 +99,15 @@ export default function Sidebar({
           onSelect={onSelect}
         />
       )}
+
+      {/* ── New Chat Panel (absolutely positioned overlay) ── */}
+      <NewChatPanel
+        isOpen={newChatOpen}
+        onClose={() => setNewChatOpen(false)}
+        onSelectUser={(userId, displayName) => {
+          onNewChat(userId, displayName);
+        }}
+      />
     </aside>
   );
 }

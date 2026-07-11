@@ -13,6 +13,8 @@ interface AppLayoutProps {
   loadingConversations: boolean;
   loadingMessages: boolean;
   conversationsError: string | null;
+  /** Called when the user selects someone from the New Chat search panel. */
+  onNewChat: (userId: string, displayName: string) => void;
 }
 
 /**
@@ -39,6 +41,7 @@ export default function AppLayout({
   loadingConversations,
   loadingMessages,
   conversationsError,
+  onNewChat,
 }: AppLayoutProps) {
   const conversationOpen = selectedConversationId !== null;
 
@@ -57,6 +60,7 @@ export default function AppLayout({
           onSelect={onSelectConversation}
           isLoading={loadingConversations}
           error={conversationsError}
+          onNewChat={onNewChat}
         />
       </div>
 

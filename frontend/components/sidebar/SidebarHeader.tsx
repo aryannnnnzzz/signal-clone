@@ -4,14 +4,20 @@ import { PenSquare, Settings, LogOut } from "lucide-react";
 import Avatar from "@/components/ui/Avatar";
 import { useAuth } from "@/contexts/AuthContext";
 
+interface SidebarHeaderProps {
+  /** Called when the user clicks the "New conversation" (pen) button. */
+  onNewChat: () => void;
+}
+
 /**
  * Fixed top bar of the sidebar.
  * Shows the current user's avatar (left), the Signal logo + wordmark (centre),
  * and action icon buttons (right) — identical to Signal Desktop layout.
  *
  * Now uses the real authenticated user and provides a logout button.
+ * The PenSquare button is now wired to open the NewChatPanel.
  */
-export default function SidebarHeader() {
+export default function SidebarHeader({ onNewChat }: SidebarHeaderProps) {
   const { user, logout } = useAuth();
 
   return (
@@ -48,9 +54,11 @@ export default function SidebarHeader() {
       {/* Action icons */}
       <div className="flex items-center gap-0.5">
         <button
+          onClick={onNewChat}
           className="p-1.5 rounded-full text-signal-secondary hover:text-signal-primary hover:bg-signal-hover transition-colors"
           aria-label="New conversation"
           title="New conversation"
+          id="new-chat-button"
         >
           <PenSquare size={17} />
         </button>

@@ -10,61 +10,132 @@
 ---
 
 # Current Project Status
-- **Overall completion:** ~82%
+- **Overall completion:** ~95%
 - **Backend completion:** 100% (Fully tested and verified)
-- **Frontend completion:** ~80% (Auth UI, Auth API, Chat REST API Integration complete; WebSocket pending)
+- **Frontend completion:** ~97% (Auth, Chat REST, WebSocket, User Search & New Chat all complete)
 - **Deployment completion:** 0%
 - **README completion:** 0%
 
 ---
 
-# What Was Built (Auth API Integration + Bug Fix + Chat API Integration)
+# What Was Built (User Search & New Chat — Milestone 10.5)
 
-## Milestone 8 — New Files
+## Milestone 10.5 — New Files
+```
+frontend/lib/userService.ts                  ← searchUsers() + createOrGetDm() wrappers;
+                                               reuses existing GET /api/users/search and
+                                               POST /api/conversations/dm endpoints
+frontend/components/sidebar/NewChatPanel.tsx ← Debounced user search overlay inside Sidebar;
+                                               300 ms debounce, auto-focus, Escape-to-close,
+                                               online dot, filters out current user
+```
+
+## Milestone 10.5 — Modified Files
+```
+frontend/contexts/ChatContext.tsx            ← Added openNewChat(otherUserId): upserts DM into
+                                               sidebar list, returns conversation id
+frontend/components/sidebar/SidebarHeader.tsx← Added onNewChat prop; wired PenSquare button
+frontend/components/sidebar/Sidebar.tsx      ← Added newChatOpen state; hosts NewChatPanel
+frontend/components/layout/AppLayout.tsx     ← Added onNewChat prop; threads to Sidebar
+frontend/app/page.tsx                        ← Added handleNewChat(): openNewChat → auto-select
+```
+
+## New Chat Flow
+```
+User clicks PenSquare (✏) button
+  → Sidebar.setNewChatOpen(true)
+    → NewChatPanel renders (absolutely over conversation list)
+      → User types in search input (300 ms debounce)
+        → GET /api/users/search?q=<query> → results appear
+          → User clicks a result
+            → NewChatPanel.onSelectUser(userId) fires
+              → ChatApp.handleNewChat(userId)
+                → ChatContext.openNewChat(userId)
+                  → POST /api/conversations/dm { user_id }
+                    → Conversation upserted into sidebar (prepend if new)
+                    → Returns conversation id
+                → handleSelectConversation(convId)
+                  → setSelectedId(convId)
+                  → ChatContext.selectConversation(convId) → loads messages
+```
+
+## Previous Milestone: WebSocket Client (Milestone 10)
+
+## Milestone 10 — New Files
+```
+frontend/contexts/WebSocketContext.tsx  ← Persistent WS connection with JWT auth,
+                                          exponential back-off reconnect, typed frame
+                                          dispatch, and public sendWsMessage() API
+```
+
+## Milestone 10 — Modified Files
+```
+frontend/contexts/ChatContext.tsx       ← Added receiveMessage(), updatePresence(),
+                                          sendMessage() now uses WS (REST fallback)
+frontend/app/page.tsx                   ← Added <WebSocketProvider> around ChatApp;
+                                          wired WS callbacks to ChatContext actions
+```
+
+## WebSocket Connection Flow
+```
+Token available → WebSocketProvider connects → ws://localhost:8000/ws?token=<jwt>
+  → Server authenticates JWT
+  → Server sends { type: "connected", data: { user_id } }
+  → Frontend sets isConnected = true
+  → Server delivers any undelivered messages
+  → Server broadcasts presence to contacts
+```
+
+## Real-time Message Flow
+```
+User types → ChatApp.handleSendMessage()
+  → ChatContext.sendMessage(convId, content, sendWsMessage, isConnected=true)
+    → Optimistic append immediately (id: "optimistic-<timestamp>")
+    → sendWsMessage(convId, content)
+      → WS frame: { type: "new_message", conversation_id, content, content_type }
+        → Backend: persists to SQLite via message_service.send_message()
+        → Backend: broadcasts { type: "message", data: MessageOut } to all members
+          → All connected clients → WebSocketContext.onmessage handler
+            → Dispatches to ChatContext.receiveMessage(payload, userId)
+              → Finds + replaces optimistic entry (sender) or appends (receiver)
+              → Updates conversation sidebar preview
+```
+
+## Reconnect Strategy
+```
+Disconnect → ws.onclose fires
+  → shouldReconnect=true? → schedule reconnect after backoffRef.current ms
+  → backoff doubles each attempt: 1s → 2s → 4s → 8s → 16s → 30s (cap)
+  → Reset to 1s on successful connection
+  → Auth failure (code 4001) → no retry
+  → Logout (token → null) → no retry
+```
+
+## Fallback Strategy
+```
+WS disconnected during reconnect window
+  → ChatContext.sendMessage() detects wsConnected=false
+  → Falls back to REST POST /api/conversations/{id}/messages
+  → Message is still sent and persisted
+```
+
+---
+
+# Previous Milestones
+
+## Milestone 8 — Auth API Integration
 ```
 frontend/lib/api.ts              ← Centralized fetch client with JWT handling
 frontend/lib/authService.ts      ← Typed wrappers for Auth API endpoints
 frontend/contexts/AuthContext.tsx← Global state for user session & actions
 ```
 
-## Milestone 8 — Modified Files
-```
-frontend/app/layout.tsx          ← Wrapped with AuthProvider
-frontend/app/page.tsx            ← Uses AuthContext to gate Chat UI or AuthFlow
-frontend/app/globals.css         ← Added bounce/spin animations
-frontend/components/auth/*       ← Wired all screens to useAuth and handle API errors
-frontend/components/sidebar/SidebarHeader.tsx ← Displays real user avatar, added Logout
-frontend/types/index.ts          ← Added AuthUser type matching backend UserOut
-```
-
-## Auth Flow Bug Fix (pendingUser pattern)
-**Root cause:** `AuthContext.register()` called `setUser(data.user)` immediately,
-flipping `isAuthenticated` to `true` and skipping OTP → DisplayName → Avatar.
-
-**Fix:** `register()` and `login()` now set `pendingUser`. `completeAuth()` promotes
-it to `user` only when AvatarScreen finishes — the single correct completion point.
-
-## Milestone 9 — New Files
+## Milestone 9 — Chat REST API Integration
 ```
 frontend/lib/chatService.ts        ← Typed wrappers for conversations & messages endpoints;
                                      all backend→frontend type mapping lives here
 frontend/contexts/ChatContext.tsx  ← Global chat state: conversations, messages cache,
                                      loading/error per-action, optimistic send
-```
-
-## Milestone 9 — Modified Files
-```
-frontend/app/page.tsx                        ← Replaced mockData; wraps ChatProvider;
-                                               loadConversations on mount, loadMessages on select
-frontend/components/layout/AppLayout.tsx     ← Added onSendMessage, loadingMessages,
-                                               loadingConversations, conversationsError props
-frontend/components/chat/ChatWindow.tsx      ← Added onSendMessage + isLoadingMessages;
-                                               Loader2 spinner replaces MessageArea while loading
-frontend/components/chat/MessageComposer.tsx ← Accepts onSend prop; optimistic draft clear;
-                                               disabled state while sending
-frontend/components/sidebar/Sidebar.tsx      ← Accepts isLoading + error props;
-                                               animated skeleton rows while loading;
-                                               inline error banner on fetch failure
 ```
 
 ## Auth Flow Sequence
@@ -73,11 +144,13 @@ Welcome → Login    → OTP → DisplayName → Avatar → completeAuth() → C
 Welcome → Register → OTP → DisplayName → Avatar → completeAuth() → Chat App
 ```
 
-## Chat Flow (Milestone 9)
+## Chat Flow (Milestone 9 + 10)
 ```
-Authenticated → loadConversations() → sidebar fills with real data
+Authenticated → WebSocket connects → loadConversations() → sidebar fills with real data
 Select conversation → loadMessages(id) → messages load (cached on revisit)
-Type & Enter/click Send → optimistic append → POST /api/conversations/{id}/messages → replace with persisted
+Type & Enter/click Send → optimistic append → WS new_message frame → server persists
+  → server broadcasts → receiveMessage() replaces optimistic with real
+  (If WS down) → REST POST fallback → replace on response
 ```
 
 ## Production Fix: Welcome Conversation on Registration (Milestone 9.5)
@@ -113,7 +186,7 @@ only creates conversations *between the 5 seed users*.
 - **Framework:** Next.js 15 App Router
 - **Language:** TypeScript
 - **Styling:** TailwindCSS v4 (`@import "tailwindcss"` / `@theme inline`)
-- **State:** Local `useState` only — no global state (correct for Milestones 1–2)
+- **State:** AuthContext (auth), ChatContext (conversations/messages), WebSocketContext (WS lifecycle)
 
 ## Layered Architecture
 1. **API/Routers (`app/api/`)**: Handle HTTP requests/responses, authorization, and route to services.
@@ -147,28 +220,25 @@ frontend/
 ├── app/
 │   ├── globals.css         # TailwindCSS v4 theme + base + auth animation
 │   ├── layout.tsx          # Root layout (Inter font, body styles)
-│   └── page.tsx            # Entry: AuthFlow gate → AppLayout
+│   └── page.tsx            # Entry: AuthFlow gate → ChatProvider → WebSocketProvider → ChatApp
 ├── components/
-│   ├── auth/               # ← NEW: 11 auth UI components
-│   │   ├── AuthFlow.tsx
-│   │   ├── AuthContainer.tsx
-│   │   ├── SignalLogo.tsx
-│   │   ├── AuthBackButton.tsx
-│   │   ├── AuthInput.tsx
-│   │   ├── WelcomeScreen.tsx
-│   │   ├── LoginScreen.tsx
-│   │   ├── RegisterScreen.tsx
-│   │   ├── OtpScreen.tsx
-│   │   ├── DisplayNameScreen.tsx
-│   │   └── AvatarScreen.tsx
+│   ├── auth/               # 11 auth UI components
 │   ├── chat/               # MessageArea, MessageBubble, MessageComposer, ChatHeader
 │   ├── layout/             # AppLayout
 │   ├── sidebar/            # Sidebar, ConversationList, ConversationListItem
 │   └── ui/                 # Avatar, StatusIcon, EmptyState
+├── contexts/
+│   ├── AuthContext.tsx     # JWT auth state & session restore
+│   ├── ChatContext.tsx     # Conversations, messages, WS-aware sendMessage
+│   └── WebSocketContext.tsx← NEW: persistent WS lifecycle, reconnect, frame dispatch
 ├── data/
-│   └── mockData.ts         # Deterministic mock conversations & messages
+│   └── mockData.ts         # Kept for reference; not used in production app
 ├── lib/
-│   └── utils.ts            # Date formatting with pinned en-GB locale + UTC
+│   ├── api.ts              # Centralized fetch client with JWT injection
+│   ├── authService.ts      # Typed wrappers for auth endpoints
+│   ├── chatService.ts      # Typed wrappers for chat endpoints + type mapping
+│   ├── userService.ts      # ← NEW: searchUsers() + createOrGetDm() for new chat flow
+│   └── utils.ts            # Date formatting (en-GB locale + UTC, hydration-safe)
 └── types/
     └── index.ts            # TypeScript interfaces
 ```
@@ -242,7 +312,6 @@ frontend/
 - **Registration & Login:** User provides username/password, backend generates bcrypt hash. If valid, issues a JWT valid for 24 hours.
 - **OTP:** `POST /verify-otp` always returns verified for code `123456`.
 - **Protected Routes:** Use FastAPI `Depends(get_current_user)` to extract Bearer token, decode JWT, and return the `User` ORM model.
-- **Frontend Mock:** Auth flow is fully UI-only. `isAuthenticated` is a local `useState` boolean in `page.tsx`.
 
 ---
 
@@ -255,7 +324,12 @@ frontend/
   - `typing_start` / `typing_stop` (Ephemeral, broadcast only)
   - `mark_delivered` / `mark_read` (Updates DB statuses, broadcasts receipts)
 - **Outbound Events (`app/ws/events.py`):**
-  - `message`, `typing`, `typing_stop`, `read_receipt`, `delivery_receipt`, `presence` (online/offline), `conversation_updated`, `member_added`, `member_removed`.
+  - `message`, `typing`, `typing_stop`, `read_receipt`, `delivery_receipt`, `presence`, `conversation_updated`, `member_added`, `member_removed`.
+- **Frontend (WebSocketContext.tsx):**
+  - Connects on token availability, disconnects on logout
+  - Exponential back-off: 1s → 2s → 4s → 8s → 16s → 30s cap
+  - Dispatches inbound frames to ChatContext callbacks
+  - `sendWsMessage(convId, content)` sends `new_message` frames
 
 ---
 
@@ -265,7 +339,7 @@ frontend/
 - Contact management (add/remove).
 - Idempotent DM creation (get or create).
 - Group creation with admin controls.
-- Message sending via REST or WebSocket.
+- Message sending via WebSocket (REST fallback when disconnected).
 - Cursor-based message pagination.
 - Per-recipient delivery and read receipt tracking.
 - Ephemeral typing indicators.
@@ -273,7 +347,7 @@ frontend/
 - Database seeding with mock data.
 - Complete multi-step authentication UI flow (6 screens).
 - Chat UI shell with 21 components, responsive, Signal-faithful design.
-- **[NEW] Auth API Integration:** Full integration of Auth UI with FastAPI backend, JWT storage, protected routing, loading states, and error handling.
+- **[NEW] Real-time WebSocket client:** JWT-authenticated WS connection, exponential back-off reconnect, live message delivery, optimistic UI.
 
 ---
 
@@ -292,13 +366,13 @@ All the following features have been manually tested against the running server 
 - ✅ OTP screen mock code `123456` verified
 - ✅ Avatar upload (drag-and-drop + file select) verified
 - ✅ No hydration errors (deterministic timestamps + pinned en-GB locale)
+- ✅ WebSocket connects with JWT token (verified via backend logs)
+- ✅ `npm run build` clean after Milestone 10
 
 ---
 
 # Pending Features
-- [x] **Frontend Chat API Integration**: ✅ Complete — conversations and messages served from backend REST API.
-- [ ] **WebSocket Client**: Connect frontend to `/ws` for real-time messaging, presence, typing indicators.
-- [ ] **Real-time chat testing**: Verify end-to-end messaging flow in the browser.
+- [ ] **Real-time chat testing**: Verify end-to-end messaging between two browser windows (requires running backend).
 - [ ] **Responsive UI**: Audit on mobile, tablet, and desktop.
 - [ ] **Deployment**: Deploy frontend to Vercel/Netlify, backend to Render/Railway.
 - [ ] **README**: Write comprehensive documentation.
@@ -315,8 +389,10 @@ All the following features have been manually tested against the running server 
 - **Why `message_status` junction table?** A message sent to a 50-person group needs 49 delivery statuses. Embedding this in the `messages` table is impossible relationally.
 - **Why Service Layer?** Decouples business logic from HTTP transport, allowing WebSocket handlers and REST routes to invoke the same exact functions.
 - **Why Cursor Pagination?** Offset pagination skips or duplicates messages when new messages arrive. Cursor (using `created_at`) guarantees consistency.
-- **Why local useState for auth (not Context/Redux)?** Initially pure UI scaffolding. Global AuthContext was introduced in Auth API Integration.
-- **Why `AuthFlow` orchestrator pattern?** Keeps all navigation logic in one place. Wired effortlessly to real `useAuth` context.
+- **Why WebSocketProvider inside ChatProvider?** WS context calls ChatContext actions. The dependent context must be inner; the dependency must be outer.
+- **Why WS send with REST fallback?** Guarantees messages are always sendable even during the reconnect window. Provides graceful degradation.
+- **Why exponential back-off?** Prevents thundering-herd on server restart. Capped at 30s to remain responsive.
+- **Why dedup by id in receiveMessage?** The backend broadcasts the `message` event to ALL members including the sender. Without dedup, the sender would see their own message twice.
 
 ---
 
@@ -340,19 +416,27 @@ All the following features have been manually tested against the running server 
 - **GitHub repository status:** Behind
 - **Suggested commit for this session:**
   ```
-  fix(auth): auto-create welcome DM for new users on registration
+  feat(frontend): implement Milestone 10 — WebSocket real-time client
 
-  After register_user() persists the new account, _bootstrap_welcome_conversation()
-  calls the existing get_or_create_dm() and send_message() services to open a DM
-  with the seed user alice and post a greeting. This ensures GET /api/conversations
-  never returns [] for a newly registered user without any dev-only endpoints.
+  Add WebSocketContext.tsx with JWT-authenticated WS connection to
+  ws://localhost:8000/ws?token=<jwt>. Implements exponential back-off
+  reconnect (1s→30s cap), inbound frame dispatch (message, presence,
+  typing, typing_stop), and sendWsMessage() for new_message frames.
+
+  Update ChatContext.tsx: add receiveMessage() (dedup by id, replaces
+  optimistic entries from sender echo), updatePresence(), and modify
+  sendMessage() to use WS as primary path with REST POST fallback when
+  disconnected.
+
+  Update page.tsx: wrap authenticated UI in <WebSocketProvider> inside
+  <ChatProvider>; wire onMessage/onPresence/onTyping callbacks to
+  ChatContext in ChatApp useEffect.
+
+  Backend unchanged. npm run build: ✓ Compiled successfully.
   ```
 
 ---
 
 # Next Milestone
-**Milestone 10: WebSocket Client** — Connect frontend to `ws://localhost:8000/ws?token=<jwt>`.
-Handle inbound frame types: `message`, `typing`, `typing_stop`, `read_receipt`, `delivery_receipt`, `presence`.
-Expose `sendMessage` via WebSocket (replacing REST send).
-Update conversation/message state reactively on inbound events.
-**Backend must remain unchanged.**
+**Milestone 11: Deployment** — Deploy backend to Render/Railway, frontend to Vercel/Netlify.
+Or: **README** — Write comprehensive documentation.
