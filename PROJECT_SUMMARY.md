@@ -94,13 +94,19 @@ The application utilises a layered, client-server architecture:
   - Multiple simultaneous typers handled correctly in a single state Map.
   - Zero memory leaks: all timers tracked via `useRef`, cleaned up on unmount.
 
+✅ **Real-time Read & Delivery Receipts (Milestone 11.5):**
+  - Automated `sendMarkDelivered` inside `page.tsx` when a new message from someone else arrives.
+  - Automated `sendMarkRead` inside `page.tsx` when a conversation with unreads is currently selected.
+  - WS `read_receipt` and `delivery_receipt` frames correctly update specific messages in `ChatContext` state.
+  - Status updates are reflected immediately in UI without page refreshes (`MessageBubble` checkmarks update).
+
 ## Pending Features
 ❌ **Deployment:** Host frontend on Vercel, backend on Render/Railway.
 ❌ **README:** Comprehensive documentation.
 
 ## Current Progress
-**~98% Complete.**
-The entire backend and full frontend (auth + chat REST API + real-time WebSocket + new chat flow + typing indicators) are built and connected. Two browser windows can exchange messages in real time and see each other's typing indicators. The next phase is deployment and documentation.
+**~99.5% Complete.**
+The entire backend and full frontend (auth + chat REST API + real-time WebSocket + new chat flow + typing indicators + read receipts) are built and connected. Two browser windows can exchange messages in real time, see each other's typing indicators, and receive live delivery/read ticks. The next phase is deployment and documentation.
 
 ## Next Milestone
 **Milestone 12: Deployment** — Deploy backend to Render/Railway, frontend to Vercel/Netlify.

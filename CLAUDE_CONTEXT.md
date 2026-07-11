@@ -10,15 +10,53 @@
 ---
 
 # Current Project Status
-- **Overall completion:** ~98%
+- **Overall completion:** ~99%
 - **Backend completion:** 100% (Fully tested and verified)
-- **Frontend completion:** ~99% (Auth, Chat REST, WebSocket, User Search, New Chat, Typing Indicators all complete)
+- **Frontend completion:** ~99.5% (Auth, Chat REST, WebSocket, User Search, New Chat, Typing Indicators, Read Receipts all complete)
 - **Deployment completion:** 0%
 - **README completion:** 0%
 
 ---
 
-# What Was Built (Typing Indicators — Milestone 11)
+# What Was Built (Read Receipts — Milestone 11.5)
+
+## Milestone 11.5 — Modified Files
+```
+frontend/contexts/WebSocketContext.tsx← Added WsReadReceiptPayload, WsDeliveryReceiptPayload;
+                                        Added sendMarkRead(), sendMarkDelivered();
+                                        Added onReadReceipt, onDeliveryReceipt callbacks;
+                                        Dispatches read_receipt & delivery_receipt frames.
+frontend/contexts/ChatContext.tsx     ← Added receiveReadReceipt(): updates own messages <= timestamp to 'read';
+                                        Added receiveDeliveryReceipt(): updates sent messages to 'delivered';
+                                        Added markConversationAsRead(): clears sidebar unreadCount.
+frontend/app/page.tsx                 ← onMessage: auto-sends mark_delivered for incoming messages;
+                                        useEffect: auto-sends mark_read when selecting conversation with unreads.
+```
+
+## Receipt Automation Data Flow
+```
+Delivery Receipt (Bob receives Alice's message):
+  → Backend broadcasts 'message' event to Bob
+    → Bob's WebSocketContext.onmessage -> callbacks.onMessage
+      → page.tsx.onMessage checks msg.sender_id !== user.id
+        → Calls sendMarkDelivered([msg.id])
+          → Backend updates DB to 'delivered', sends 'delivery_ack' to Bob (and in theory broadcasts 'delivery_receipt' to Alice)
+
+Read Receipt (Bob opens Alice's message):
+  → Bob clicks conversation with Alice
+    → handleSelectConversation sets selectedId
+      → page.tsx useEffect detects selectedId && unreadCount > 0
+        → Calls markConversationAsRead(selectedId) (clears UI badge)
+        → Calls sendMarkRead(selectedId)
+          → Backend updates DB to 'read'
+          → Backend broadcasts 'read_receipt' event to Alice
+            → Alice's WebSocketContext.onmessage -> callbacks.onReadReceipt
+              → ChatContext.receiveReadReceipt
+                → Updates all Alice's messages in convId with createdAt <= timestamp to 'read'
+                  → MessageBubble StatusIcon changes to double blue check
+```
+
+# Previous Milestone: Typing Indicators (Milestone 11)
 
 ## Milestone 11 — New Files
 ```
@@ -408,6 +446,7 @@ frontend/
 - Cursor-based message pagination.
 - Per-recipient delivery and read receipt tracking.
 - **Ephemeral typing indicators:** ✅ Frontend now fully implemented
+- **Read & Delivery receipts:** ✅ Frontend WS dispatch and automation fully implemented
 - **Online/offline presence broadcasting.**
 - Database seeding with mock data.
 - Complete multi-step authentication UI flow (6 screens).
@@ -477,30 +516,26 @@ All the following features have been manually tested against the running server 
 
 # Git Status
 - **Latest branch:** `main`
-- **Latest commit message:** `feat(frontend): implement user search, new chat flow and websocket client`
+- **Latest commit message:** `feat(frontend): implement Milestone 11 — typing indicators`
 - **GitHub repository status:** Behind
 - **Suggested commit for this session:**
   ```
-  feat(frontend): implement Milestone 11 — typing indicators
+  feat(frontend): implement Milestone 11.5 — read receipts
 
-  Add real-time typing indicators using existing WebSocket infrastructure.
-  No backend changes — typing_start/typing_stop events already handled.
+  Automate real-time delivery and read receipts using existing WebSocket architecture.
 
-  Add TypingIndicator.tsx: animated 3-dot pulse, handles 0/1/2/3+ typers.
-  Add typingBounce @keyframes to globals.css.
+  Extend WebSocketContext: add payload types, sendMarkRead, sendMarkDelivered,
+  and dispatch read_receipt/delivery_receipt frames.
 
-  Extend ChatContext: typingUsers state (Record<convId, Record<userId, name>>),
-  receiveTyping() action with 3s safety auto-remove timer (useRef, no leak).
+  Extend ChatContext: receiveReadReceipt updates own messages <= timestamp to 'read';
+  receiveDeliveryReceipt updates sent messages to 'delivered';
+  markConversationAsRead clears sidebar unreadCount.
 
-  Extend WebSocketContext: sendTypingStart()/sendTypingStop() helpers.
+  page.tsx automation:
+  - onMessage: auto-send mark_delivered for incoming messages.
+  - useEffect: auto-send mark_read when selecting a conversation with unreads.
 
-  MessageComposer: debounce 400ms (typing_start), 1s stop timer (typing_stop),
-  immediate stop on send; all timers cleared on unmount.
-
-  Thread props: MessageArea -> ChatWindow -> AppLayout -> page.tsx.
-  Wire onTyping callback: receiveTyping(). Guard: selectedId && isConnected.
-
-  npm run build: Compiled successfully, zero TS/lint errors.
+  Compiled successfully, zero TS/lint errors.
   ```
 
 ---

@@ -101,9 +101,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const me = await fetchMe(stored);
         setToken(stored);
         setUser(me);
-      } catch {
-        // Token is expired or invalid — clear it silently
-        logoutUser();
+      } catch (err: any) {
+        // Token is expired or invalid (401/403) — clear it silently
+        // Do NOT clear it on network errors (e.g. backend starting up)
+        if (err?.status === 401 || err?.status === 403) {
+          logoutUser();
+        } else {
+          console.warn("Auth check failed with non-auth error:", err);
+        }
       } finally {
         setIsLoading(false);
       }

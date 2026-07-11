@@ -11,6 +11,8 @@ import {
   type WsMessagePayload,
   type WsPresencePayload,
   type WsTypingPayload,
+  type WsReadReceiptPayload,
+  type WsDeliveryReceiptPayload,
 } from "@/contexts/WebSocketContext";
 
 /**
@@ -88,10 +90,21 @@ function ChatApp() {
     receiveMessage,
     receiveTyping,
     updatePresence,
+    receiveReadReceipt,
+    receiveDeliveryReceipt,
+    markConversationAsRead,
     openNewChat,
   } = useChat();
 
-  const { isConnected, sendWsMessage, sendTypingStart, sendTypingStop, registerCallbacks } = useWebSocket();
+  const { 
+    isConnected, 
+    sendWsMessage, 
+    sendTypingStart, 
+    sendTypingStop, 
+    sendMarkRead,
+    sendMarkDelivered,
+    registerCallbacks 
+  } = useWebSocket();
   const { user } = useAuth();
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -103,6 +116,9 @@ function ChatApp() {
     registerCallbacks({
       onMessage: (payload: WsMessagePayload) => {
         receiveMessage(payload, user.id);
+        if (payload.sender_id !== user.id) {
+          sendMarkDelivered([payload.id]);
+        }
       },
       onPresence: (payload: WsPresencePayload) => {
         updatePresence(payload.user_id, payload.is_online);
@@ -111,8 +127,33 @@ function ChatApp() {
         console.log("[DEBUG] receiveTyping payload:", payload, "isStop:", isStop);
         receiveTyping(payload, isStop);
       },
+      onReadReceipt: (payload: WsReadReceiptPayload) => {
+        receiveReadReceipt(payload);
+      },
+      onDeliveryReceipt: (payload: WsDeliveryReceiptPayload) => {
+        receiveDeliveryReceipt(payload);
+      },
     });
-  }, [user, registerCallbacks, receiveMessage, receiveTyping, updatePresence]);
+  }, [
+    user,
+    registerCallbacks,
+    receiveMessage,
+    receiveTyping,
+    updatePresence,
+    receiveReadReceipt,
+    receiveDeliveryReceipt,
+    sendMarkDelivered,
+  ]);
+
+  /* ── Mark conversation read automatically ────────── */
+  useEffect(() => {
+    if (!selectedId || !isConnected) return;
+    const conv = conversations.find((c) => c.id === selectedId);
+    if (conv && conv.unreadCount > 0) {
+      markConversationAsRead(selectedId);
+      sendMarkRead(selectedId);
+    }
+  }, [selectedId, conversations, isConnected, markConversationAsRead, sendMarkRead]);
 
   /* ── Load conversations on mount ─────────────────── */
   useEffect(() => {

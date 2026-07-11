@@ -69,12 +69,27 @@ export interface WsTypingPayload {
   display_name?: string;
 }
 
+export interface WsReadReceiptPayload {
+  conversation_id: string;
+  user_id: string;
+  message_id: string;
+  timestamp: string;
+}
+
+export interface WsDeliveryReceiptPayload {
+  message_ids: string[];
+  user_id: string;
+  timestamp: string;
+}
+
 // ─── Context shape ────────────────────────────────────────────────────────────
 
 interface WebSocketCallbacks {
   onMessage: (payload: WsMessagePayload) => void;
   onPresence: (payload: WsPresencePayload) => void;
   onTyping: (payload: WsTypingPayload, isStop: boolean) => void;
+  onReadReceipt: (payload: WsReadReceiptPayload) => void;
+  onDeliveryReceipt: (payload: WsDeliveryReceiptPayload) => void;
 }
 
 interface WebSocketContextValue {
@@ -88,6 +103,10 @@ interface WebSocketContextValue {
   sendTypingStart: (conversationId: string) => void;
   /** Send a typing_stop frame — called after 1s inactivity or on message send. */
   sendTypingStop: (conversationId: string) => void;
+  /** Send a mark_read frame for a conversation. */
+  sendMarkRead: (conversationId: string) => void;
+  /** Send a mark_delivered frame for specific messages. */
+  sendMarkDelivered: (messageIds: string[]) => void;
   /**
    * Register callbacks to receive inbound frames.
    * Called once by ChatContext on mount. Replaces any previously registered
@@ -193,6 +212,18 @@ export function WebSocketProvider({ token, children }: WebSocketProviderProps) {
         case "typing_stop": {
           const payload = frame.data as WsTypingPayload;
           callbacksRef.current?.onTyping(payload, true);
+          break;
+        }
+
+        case "read_receipt": {
+          const payload = frame.data as WsReadReceiptPayload;
+          callbacksRef.current?.onReadReceipt(payload);
+          break;
+        }
+
+        case "delivery_receipt": {
+          const payload = frame.data as WsDeliveryReceiptPayload;
+          callbacksRef.current?.onDeliveryReceipt(payload);
           break;
         }
 
@@ -310,6 +341,20 @@ export function WebSocketProvider({ token, children }: WebSocketProviderProps) {
     [sendFrame]
   );
 
+  const sendMarkRead = useCallback(
+    (conversationId: string) => {
+      sendFrame({ type: "mark_read", conversation_id: conversationId });
+    },
+    [sendFrame]
+  );
+
+  const sendMarkDelivered = useCallback(
+    (messageIds: string[]) => {
+      sendFrame({ type: "mark_delivered", message_ids: messageIds });
+    },
+    [sendFrame]
+  );
+
   const registerCallbacks = useCallback((callbacks: WebSocketCallbacks) => {
     callbacksRef.current = callbacks;
   }, []);
@@ -322,6 +367,8 @@ export function WebSocketProvider({ token, children }: WebSocketProviderProps) {
     sendWsMessage,
     sendTypingStart,
     sendTypingStop,
+    sendMarkRead,
+    sendMarkDelivered,
     registerCallbacks,
   };
 

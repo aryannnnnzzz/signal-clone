@@ -15,10 +15,30 @@
 - [x] **Milestone 9:** Frontend Chat API integration (REST calls for messages/conversations)
 - [x] **Milestone 10:** Real-time chat integration (WebSocket client)
 - [x] **Milestone 10.5:** User Search & New Conversation Flow
-- [x] **Milestone 11:** Typing Indicators ← **JUST COMPLETED**
+- [x] **Milestone 11:** Typing Indicators
+- [x] **Milestone 11.5:** Read Receipts ← **JUST COMPLETED**
 - [ ] **Milestone 12:** Deployment
 
 ## Recently Completed Work
+
+### **[Milestone 11.5]** Read Receipts
+- Extended `frontend/contexts/WebSocketContext.tsx`:
+  - Added `WsReadReceiptPayload` and `WsDeliveryReceiptPayload` interfaces.
+  - Added `sendMarkRead(conversationId)` and `sendMarkDelivered(messageIds)`.
+  - Added `onReadReceipt` and `onDeliveryReceipt` to `WebSocketCallbacks`.
+  - Dispatched `read_receipt` and `delivery_receipt` WS frames to the new callbacks.
+
+- Extended `frontend/contexts/ChatContext.tsx`:
+  - Added `receiveReadReceipt()` action to update own messages' status to `"read"` if sent before/at the receipt timestamp.
+  - Added `receiveDeliveryReceipt()` action to update own messages' status from `"sent"` to `"delivered"`.
+  - Added `markConversationAsRead()` to locally clear `unreadCount` for a conversation in the sidebar.
+
+- Modified `frontend/app/page.tsx`:
+  - Automated Delivery Receipts: Inside `onMessage`, if the message is from another user, automatically called `sendMarkDelivered([payload.id])`.
+  - Automated Read Receipts: Added a `useEffect` on `selectedId` and `conversations`. If the open conversation has `unreadCount > 0`, automatically called `sendMarkRead(selectedId)` and `markConversationAsRead(selectedId)`.
+  - Wired WS callbacks `onReadReceipt` and `onDeliveryReceipt` to `ChatContext`.
+
+- Verified `npm run build` is clean (0 TS errors, 0 ESLint warnings).
 
 ### **[Milestone 11]** Typing Indicators
 - No backend changes — typing_start/typing_stop WS events already fully implemented in backend.
@@ -136,38 +156,35 @@
 | **WebSocket Client** | ✅ Complete | JWT auth, exponential back-off reconnect, live messaging |
 | **User Search & New Chat** | ✅ Complete | Search panel, DM creation, auto-select, sidebar upsert |
 | **Typing Indicators** | ✅ Complete | Debounced WS events, animated indicator, multi-user, auto-remove |
+| **Read Receipts** | ✅ Complete | Automated WS read/delivery dispatch, real-time message bubble status updates |
 | **Testing** | ⚠️ Partial | Backend manually tested, no unit tests yet |
 | **Deployment** | ❌ Pending | Nothing deployed yet |
 
 ## GitHub Status
-- **Latest Commit:** `feat(frontend): implement user search, new chat flow and websocket client`
-- **Branch:** `main` (Behind — Milestones 6-11 not yet committed)
+- **Latest Commit:** `feat(frontend): implement Milestone 11 — typing indicators`
+- **Branch:** `main` (Behind — Milestones 6-11.5 not yet committed)
 - **Suggested commit:**
   ```
-  feat(frontend): implement Milestone 11 — typing indicators
+  feat(frontend): implement Milestone 11.5 — read receipts
 
-  Add real-time typing indicators using existing WebSocket infrastructure.
-  No backend changes — typing_start/typing_stop events already handled.
+  Automate real-time delivery and read receipts using existing WebSocket architecture.
 
-  Add TypingIndicator.tsx: animated 3-dot pulse, handles 0/1/2/3+ typers.
-  Add typingBounce @keyframes to globals.css.
+  Extend WebSocketContext: add payload types, sendMarkRead, sendMarkDelivered,
+  and dispatch read_receipt/delivery_receipt frames.
 
-  Extend ChatContext: typingUsers state (Record<convId, Record<userId, name>>),
-  receiveTyping() action with 3s safety auto-remove timer (useRef, no leak).
+  Extend ChatContext: receiveReadReceipt updates own messages <= timestamp to 'read';
+  receiveDeliveryReceipt updates sent messages to 'delivered';
+  markConversationAsRead clears sidebar unreadCount.
 
-  Extend WebSocketContext: sendTypingStart()/sendTypingStop() helpers.
+  page.tsx automation:
+  - onMessage: auto-send mark_delivered for incoming messages.
+  - useEffect: auto-send mark_read when selecting a conversation with unreads.
 
-  MessageComposer: debounce 400ms (typing_start), 1s stop timer (typing_stop),
-  immediate stop on send; all timers cleared on unmount.
-
-  Thread props: MessageArea -> ChatWindow -> AppLayout -> page.tsx.
-  Wire onTyping callback: receiveTyping(). Guard: selectedId && isConnected.
-
-  npm run build: Compiled successfully, zero TS/lint errors.
+  Compiled successfully, zero TS/lint errors.
   ```
 
 ## Current Blockers
-- None. Full real-time + new chat flow + typing indicators implemented end-to-end.
+- None. Full real-time + new chat flow + typing indicators + read receipts implemented end-to-end.
 
 ## TODO Checklist
 - [x] Initialize Next.js project in `frontend/`.

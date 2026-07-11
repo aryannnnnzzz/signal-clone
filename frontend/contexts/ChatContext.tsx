@@ -29,12 +29,14 @@
  *     the sender's own message back as a `message` event.
  */
 
-import {
+import React, {
   createContext,
   useContext,
   useState,
   useCallback,
+  useEffect,
   useRef,
+  useMemo,
   type ReactNode,
 } from "react";
 import {
@@ -45,7 +47,13 @@ import {
 import { createOrGetDm } from "@/lib/userService";
 import { useAuth } from "@/contexts/AuthContext";
 import type { Conversation, Message } from "@/types";
-import type { WsMessagePayload, WsTypingPayload } from "@/contexts/WebSocketContext";
+import type { 
+  WsMessagePayload,
+  WsPresencePayload,
+  WsTypingPayload,
+  WsReadReceiptPayload,
+  WsDeliveryReceiptPayload,
+} from "@/contexts/WebSocketContext";
 
 /** Per-conversation typing state — a map of userId → display name. */
 export type TypingUsersMap = Record<string, Record<string, string>>;
@@ -80,6 +88,12 @@ interface ChatContextValue {
   receiveTyping: (payload: WsTypingPayload, isStop: boolean) => void;
   /** Called by WebSocketContext when a `presence` frame arrives. */
   updatePresence: (userId: string, isOnline: boolean) => void;
+  /** Process a read receipt from WS */
+  receiveReadReceipt: (payload: WsReadReceiptPayload) => void;
+  /** Process a delivery receipt from WS */
+  receiveDeliveryReceipt: (payload: WsDeliveryReceiptPayload) => void;
+  /** Clear unread count locally for a conversation */
+  markConversationAsRead: (conversationId: string) => void;
   /**
    * Open or create a DM with another user.
    * - Calls POST /api/conversations/dm (idempotent get-or-create).
@@ -326,6 +340,64 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     void isOnline;
   }, []);
 
+  /* ── Receive read and delivery receipts ────────────────── */
+
+  const receiveReadReceipt = useCallback((payload: WsReadReceiptPayload) => {
+    const { conversation_id, timestamp } = payload;
+    setMessages((prev) => {
+      const existing = prev[conversation_id];
+      if (!existing) return prev;
+
+      let updated = false;
+      const newMessages = existing.map((msg) => {
+        // Only update own messages sent before/at the read receipt timestamp
+        if (msg.isOwn && msg.status !== "read" && msg.createdAt <= timestamp) {
+          updated = true;
+          return { ...msg, status: "read" as const };
+        }
+        return msg;
+      });
+
+      return updated ? { ...prev, [conversation_id]: newMessages } : prev;
+    });
+  }, []);
+
+  const receiveDeliveryReceipt = useCallback((payload: WsDeliveryReceiptPayload) => {
+    const { message_ids } = payload;
+    setMessages((prev) => {
+      let anyUpdated = false;
+      const next = { ...prev };
+
+      for (const [convId, msgs] of Object.entries(prev)) {
+        let convUpdated = false;
+        const newMsgs = msgs.map((msg) => {
+          if (msg.isOwn && message_ids.includes(msg.id) && msg.status === "sent") {
+            convUpdated = true;
+            return { ...msg, status: "delivered" as const };
+          }
+          return msg;
+        });
+
+        if (convUpdated) {
+          anyUpdated = true;
+          next[convId] = newMsgs;
+        }
+      }
+
+      return anyUpdated ? next : prev;
+    });
+  }, []);
+
+  const markConversationAsRead = useCallback((conversationId: string) => {
+    setConversations((prev) =>
+      prev.map((c) =>
+        c.id === conversationId && c.unreadCount > 0
+          ? { ...c, unreadCount: 0 }
+          : c
+      )
+    );
+  }, []);
+
   /* ── Send a message (WS primary, REST fallback) ──────── */
 
   const sendMessage = useCallback(
@@ -459,7 +531,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
   /* ── Value ───────────────────────────────────────────── */
 
-  const value: ChatContextValue = {
+  const value = useMemo(() => ({
     conversations,
     messages,
     loadingConversations,
@@ -474,8 +546,30 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     receiveMessage,
     receiveTyping,
     updatePresence,
+    receiveReadReceipt,
+    receiveDeliveryReceipt,
+    markConversationAsRead,
     openNewChat,
-  };
+  }), [
+    conversations,
+    messages,
+    loadingConversations,
+    loadingMessages,
+    sendingMessage,
+    conversationsError,
+    messagesError,
+    typingUsers,
+    loadConversations,
+    selectConversation,
+    sendMessage,
+    receiveMessage,
+    receiveTyping,
+    updatePresence,
+    receiveReadReceipt,
+    receiveDeliveryReceipt,
+    markConversationAsRead,
+    openNewChat,
+  ]);
 
   return <ChatContext.Provider value={value}>{children}</ChatContext.Provider>;
 }

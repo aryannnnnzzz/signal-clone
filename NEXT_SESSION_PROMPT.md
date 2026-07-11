@@ -116,6 +116,16 @@ Location: `frontend/components/chat/TypingIndicator.tsx`
 
 **Backend: no changes.** `typing_start`/`typing_stop` frames were already fully handled.
 
+### Frontend — Milestone 11.5: Read & Delivery Receipts (✅ Complete)
+Location: `frontend/contexts/WebSocketContext.tsx`, `frontend/contexts/ChatContext.tsx`, `frontend/app/page.tsx`
+
+**Modified:**
+- `WebSocketContext.tsx`: Added `WsReadReceiptPayload`, `WsDeliveryReceiptPayload`. Added `sendMarkRead()`, `sendMarkDelivered()`. Dispatches `read_receipt` and `delivery_receipt` WS frames to `ChatContext`.
+- `ChatContext.tsx`: Added `receiveReadReceipt()` (updates own messages `<= timestamp` to 'read'), `receiveDeliveryReceipt()` (updates sent messages to 'delivered'), and `markConversationAsRead()` (locally clears `unreadCount`).
+- `page.tsx`: 
+  - Automated `sendMarkDelivered`: when `onMessage` receives a message from someone else, automatically emits `sendMarkDelivered`.
+  - Automated `sendMarkRead`: `useEffect` monitors `selectedId` and `conversations`. If the selected conversation has unread messages, it automatically emits `sendMarkRead` and clears the local UI badge.
+
 ### Provider nesting (important for future changes):
 ```tsx
 <ChatProvider>           ← owns conversations/messages state
@@ -206,6 +216,7 @@ ws://localhost:8000/ws?token=<jwt>
 { "type": "typing_start", "conversation_id": "uuid" }
 { "type": "typing_stop", "conversation_id": "uuid" }
 { "type": "mark_read", "conversation_id": "uuid" }
+{ "type": "mark_delivered", "message_ids": ["uuid"] }
 ```
 
 ---
