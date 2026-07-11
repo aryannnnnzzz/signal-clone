@@ -1,7 +1,9 @@
 "use client";
 
 import { useState, useRef, useEffect, KeyboardEvent } from "react";
-import { Smile, Paperclip, Mic, Send } from "lucide-react";
+import { Smile, Paperclip, Mic, Send, Trash2 } from "lucide-react";
+import EmojiPicker, { Theme, EmojiClickData } from "emoji-picker-react";
+import { useSettings } from "@/contexts/SettingsContext";
 
 interface MessageComposerProps {
   /**
@@ -9,7 +11,7 @@ interface MessageComposerProps {
    * The composer clears its draft immediately (optimistic) and awaits the
    * promise. Any error is handled by the caller (ChatContext).
    */
-  onSend: (content: string, contentType?: "text" | "image" | "file") => Promise<void>;
+  onSend: (content: string, contentType?: "text" | "image" | "file" | "voice") => Promise<void>;
   /** Called after 400 ms of typing — send a typing_start WS frame. */
   onTypingStart: () => void;
   /** Called after 1 s of inactivity or immediately on send — send typing_stop. */
@@ -40,13 +42,25 @@ interface AttachmentData {
 export default function MessageComposer({ onSend, onTypingStart, onTypingStop, replyingToMessage, onCancelReply }: MessageComposerProps) {
   const [draft, setDraft] = useState("");
   const [isSending, setIsSending] = useState(false);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const emojiPickerRef = useRef<HTMLDivElement>(null);
+  const { settings } = useSettings();
   
   const [attachment, setAttachment] = useState<AttachmentData | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
   const [isDragOver, setIsDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Voice recording state
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingTime, setRecordingTime] = useState(0);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const recordingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const isSendingVoiceRef = useRef(false);
+  const recordingTimeRef = useRef(0);
 
   // Refs for debounce timers — mutated without triggering re-renders
   // debounceRef:  fires typing_start 400 ms after first keystroke in a burst
@@ -64,6 +78,11 @@ export default function MessageComposer({ onSend, onTypingStart, onTypingStop, r
         clearInterval(debounceRef.current);
       }
       if (stopRef.current) clearTimeout(stopRef.current);
+      if (recordingIntervalRef.current) clearInterval(recordingIntervalRef.current);
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
+        mediaRecorderRef.current.stream.getTracks().forEach(t => t.stop());
+        mediaRecorderRef.current.stop();
+      }
     };
   }, []);
 
@@ -74,6 +93,35 @@ export default function MessageComposer({ onSend, onTypingStart, onTypingStop, r
     el.style.height = "auto";
     el.style.height = `${Math.min(el.scrollHeight, 120)}px`;
   }, [draft]);
+
+  // Handle click outside for Emoji Picker
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (
+        emojiPickerRef.current &&
+        !emojiPickerRef.current.contains(event.target as Node)
+      ) {
+        setShowEmojiPicker(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
+
+  // Handle Escape key to close picker
+  useEffect(() => {
+    function handleKeyDown(event: globalThis.KeyboardEvent) {
+      if (event.key === "Escape" && showEmojiPicker) {
+        setShowEmojiPicker(false);
+      }
+    }
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [showEmojiPicker]);
 
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -131,6 +179,28 @@ export default function MessageComposer({ onSend, onTypingStart, onTypingStop, r
         }, 2500);
       }, 400);
     }
+  };
+
+  const handleEmojiClick = (emojiData: EmojiClickData) => {
+    if (!textareaRef.current) return;
+    
+    const cursorPosition = textareaRef.current.selectionStart;
+    const textBeforeCursor = draft.substring(0, cursorPosition);
+    const textAfterCursor = draft.substring(textareaRef.current.selectionEnd);
+    
+    const newDraft = textBeforeCursor + emojiData.emoji + textAfterCursor;
+    setDraft(newDraft);
+    
+    // Calculate new cursor position
+    const newCursorPosition = cursorPosition + emojiData.emoji.length;
+    
+    // Use timeout to allow React state to update before setting selection
+    setTimeout(() => {
+      if (textareaRef.current) {
+        textareaRef.current.focus();
+        textareaRef.current.setSelectionRange(newCursorPosition, newCursorPosition);
+      }
+    }, 0);
   };
 
   const handleFileUpload = async (file: File) => {
@@ -232,43 +302,193 @@ export default function MessageComposer({ onSend, onTypingStart, onTypingStop, r
     }
   };
 
+  // --- Voice Recording Logic ---
+
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
+      audioChunksRef.current = [];
+      isSendingVoiceRef.current = false;
+      
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+      
+      mediaRecorder.onstop = () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: "audio/webm" });
+        stream.getTracks().forEach(track => track.stop());
+        
+        if (isSendingVoiceRef.current) {
+          handleVoiceUpload(audioBlob, recordingTimeRef.current);
+        }
+      };
+      
+      mediaRecorder.start();
+      setIsRecording(true);
+      setRecordingTime(0);
+      recordingTimeRef.current = 0;
+      
+      recordingIntervalRef.current = setInterval(() => {
+        setRecordingTime((prev) => {
+          const next = prev + 1;
+          recordingTimeRef.current = next;
+          if (next >= 300) { // 5 minutes max
+            stopRecordingAndSend();
+          }
+          return next;
+        });
+      }, 1000);
+      
+    } catch (err) {
+      console.error("Microphone permission denied:", err);
+      setUploadError("Microphone access denied.");
+      setTimeout(() => setUploadError(""), 3000);
+    }
+  };
+
+  const stopRecordingAndSend = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      isSendingVoiceRef.current = true;
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+      if (recordingIntervalRef.current) clearInterval(recordingIntervalRef.current);
+    }
+  };
+
+  const cancelRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      isSendingVoiceRef.current = false;
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+      setRecordingTime(0);
+      recordingTimeRef.current = 0;
+      if (recordingIntervalRef.current) clearInterval(recordingIntervalRef.current);
+    }
+  };
+
+  const handleVoiceUpload = async (audioBlob: Blob, duration: number) => {
+    setIsUploading(true);
+    try {
+      const formData = new FormData();
+      const file = new File([audioBlob], "voice_message.webm", { type: "audio/webm" });
+      formData.append("file", file);
+      
+      const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+      const token = localStorage.getItem("signal_token");
+      
+      const res = await fetch(`${API_BASE}/api/upload`, {
+        method: "POST",
+        headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: formData
+      });
+      
+      if (!res.ok) throw new Error("Voice upload failed");
+      
+      const attachmentData = await res.json();
+      
+      const payload = JSON.stringify({
+        text: "Voice Message",
+        attachment: attachmentData,
+        duration: duration
+      });
+      
+      await onSend(payload, "voice");
+    } catch (err) {
+      console.error(err);
+      setUploadError("Failed to send voice message");
+      setTimeout(() => setUploadError(""), 3000);
+    } finally {
+      setIsUploading(false);
+      isSendingVoiceRef.current = false;
+    }
+  };
+
   const hasDraft = draft.trim().length > 0 || attachment !== null;
 
   return (
-    <footer className="flex items-end gap-1.5 px-3 py-3 bg-signal-sidebar border-t border-signal-border flex-shrink-0">
+    <footer className="flex items-end gap-1.5 px-3 py-3 bg-signal-sidebar border-t border-signal-border flex-shrink-0 relative">
+      {/* Emoji Picker Popover */}
+      {showEmojiPicker && !isRecording && (
+        <div 
+          ref={emojiPickerRef}
+          className="absolute bottom-full left-2 mb-2 z-50 shadow-2xl"
+          style={{ animation: "authEnter 0.2s ease-out" }}
+        >
+          <EmojiPicker
+            theme={
+              settings.theme === "dark" 
+                ? Theme.DARK 
+                : settings.theme === "light" 
+                  ? Theme.LIGHT 
+                  : Theme.AUTO
+            }
+            onEmojiClick={handleEmojiClick}
+            previewConfig={{ showPreview: false }}
+          />
+        </div>
+      )}
+
       {/* Emoji */}
-      <button
-        className="p-2 text-signal-secondary hover:text-signal-primary transition-colors flex-shrink-0 mb-[1px]"
-        aria-label="Insert emoji"
-        title="Emoji"
-      >
-        <Smile size={21} />
-      </button>
+      {!isRecording && (
+        <button
+          onClick={() => setShowEmojiPicker((prev) => !prev)}
+          className="p-2 text-signal-secondary hover:text-signal-primary transition-colors flex-shrink-0 mb-[1px]"
+          aria-label="Insert emoji"
+          title="Emoji"
+        >
+          <Smile size={21} />
+        </button>
+      )}
 
       {/* Attachment */}
-      <input
-        type="file"
-        ref={fileInputRef}
-        className="hidden"
-        onChange={(e) => {
-          const file = e.target.files?.[0];
-          if (file) handleFileUpload(file);
-          // Clear input so same file can be selected again
-          if (e.target) e.target.value = "";
-        }}
-      />
-      <button
-        onClick={() => fileInputRef.current?.click()}
-        disabled={isUploading}
-        className="p-2 text-signal-secondary hover:text-signal-primary transition-colors flex-shrink-0 mb-[1px] disabled:opacity-50"
-        aria-label="Attach file"
-        title="Attach"
-      >
-        <Paperclip size={21} />
-      </button>
+      {!isRecording && (
+        <>
+          <input
+            type="file"
+            ref={fileInputRef}
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) handleFileUpload(file);
+              // Clear input so same file can be selected again
+              if (e.target) e.target.value = "";
+            }}
+          />
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={isUploading}
+            className="p-2 text-signal-secondary hover:text-signal-primary transition-colors flex-shrink-0 mb-[1px] disabled:opacity-50"
+            aria-label="Attach file"
+            title="Attach"
+          >
+            <Paperclip size={21} />
+          </button>
+        </>
+      )}
 
       {/* Auto-resizing textarea & Previews */}
-      <div className={`flex-1 relative bg-signal-hover rounded-2xl overflow-hidden transition-all border ${isDragOver ? 'border-signal-blue' : 'border-transparent'}`}
+      {isRecording ? (
+        <div className="flex-1 flex items-center justify-between px-4 h-[44px] bg-signal-hover rounded-full">
+          <div className="flex items-center gap-3">
+            <div className="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse shadow-[0_0_8px_rgba(239,68,68,0.6)]" />
+            <span className="text-signal-primary text-sm font-medium tabular-nums">
+              {Math.floor(recordingTime / 60)}:{(recordingTime % 60).toString().padStart(2, "0")}
+            </span>
+          </div>
+          <button 
+            onClick={cancelRecording}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-signal-secondary hover:text-red-400 hover:bg-red-400/10 rounded-full transition-colors text-sm font-medium"
+          >
+            <Trash2 size={16} />
+            Cancel
+          </button>
+        </div>
+      ) : (
+        <div className={`flex-1 relative bg-signal-hover rounded-2xl overflow-hidden transition-all border ${isDragOver ? 'border-signal-blue' : 'border-transparent'}`}
            onDragOver={(e) => { e.preventDefault(); setIsDragOver(true); }}
            onDragLeave={() => setIsDragOver(false)}
            onDrop={handleDrop}>
@@ -293,7 +513,7 @@ export default function MessageComposer({ onSend, onTypingStart, onTypingStop, r
               <div className="text-sm text-signal-secondary truncate">
                 {replyingToMessage.contentType === "text" 
                   ? replyingToMessage.content
-                  : (replyingToMessage.contentType === "image" ? "📷 Image" : "📎 Attachment")}
+                  : (replyingToMessage.contentType === "image" ? "📷 Image" : (replyingToMessage.contentType === "voice" ? "🎤 Voice Message" : "📎 Attachment"))}
               </div>
             </div>
           </div>
@@ -356,6 +576,7 @@ export default function MessageComposer({ onSend, onTypingStart, onTypingStop, r
           style={{ maxHeight: "120px", overflowY: "auto" }}
         />
       </div>
+      )}
 
       {/* Send / Mic — toggled by draft content */}
       {hasDraft ? (
@@ -373,8 +594,25 @@ export default function MessageComposer({ onSend, onTypingStart, onTypingStop, r
         >
           <Send size={18} />
         </button>
+      ) : isRecording ? (
+        <button
+          onClick={stopRecordingAndSend}
+          disabled={isUploading}
+          className="
+            p-2 bg-signal-blue hover:bg-signal-blue-hover
+            text-white rounded-full flex-shrink-0 mb-[1px]
+            transition-colors duration-150
+            disabled:opacity-60 disabled:cursor-not-allowed
+          "
+          aria-label="Send voice message"
+          title="Send"
+        >
+          <Send size={18} />
+        </button>
       ) : (
         <button
+          onClick={startRecording}
+          disabled={isUploading || isSending}
           className="p-2 text-signal-secondary hover:text-signal-primary transition-colors flex-shrink-0 mb-[1px]"
           aria-label="Voice message"
           title="Voice message"

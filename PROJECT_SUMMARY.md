@@ -113,6 +113,25 @@ The application utilises a layered, client-server architecture:
   - Save UX improvements: disabling save unless changes detected, success toasts, error toasts, and loading spinners.
   - Smooth Light/Dark mode transitions across all major layout backgrounds and borders.
 
+✅ **Attachments (Milestone 14):**
+  - Image and file uploading with drag-and-drop.
+  - Secure bucket integration and inline previewing for media files.
+
+✅ **Replies & Reactions (Milestones 15 & 16):**
+  - Target-message quoting, scrolling to original, optimistic UI rendering.
+  - Live emoji reactions broadcasted in real time.
+
+✅ **Group Chats (Milestone 17):**
+  - Group creation, multi-user typers, dynamic headers, and online persistence logic.
+
+✅ **Search (Milestone 18):**
+  - Global Search across all conversations (Ctrl+K).
+  - Conversation-local text search with jump-to highlighting (Ctrl+F).
+
+✅ **Browser Notifications (Milestone 20):**
+  - Smart desktop notifications that are only sent when window isn't focused.
+  - Interactive click-to-jump notifications.
+
 ## Pending Features
 ❌ **Deployment:** Host frontend on Vercel, backend on Render/Railway.
 ❌ **README:** Comprehensive documentation.

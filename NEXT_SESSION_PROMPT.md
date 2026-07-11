@@ -153,7 +153,7 @@ Location: `frontend/contexts/SettingsContext.tsx`, `frontend/components/settings
 
 ## 3. What remains (your task)
 
-### Milestone 12: Deployment
+### Milestone 20: Read receipts and unread badges polishing
 
 Options:
 - **Backend:** Render.com (free tier, Docker or Python runtime) or Railway.app

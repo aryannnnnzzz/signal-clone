@@ -19,7 +19,7 @@ from app.schemas.conversation import (
 )
 from app.schemas.message import MessageOut
 from app.schemas.user import UserOut
-from app.services import conversation_service
+from app.services import conversation_service, message_service
 from app.ws import events as ws_events
 from app.ws.manager import manager
 
@@ -93,6 +93,16 @@ async def create_group(
             status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
         )
 
+    # Broadcast system message
+    sys_msg = await message_service.send_system_message(
+        db, conversation.id, f"{current_user.display_name} created the group."
+    )
+    msg_out = MessageOut.model_validate(sys_msg)
+    event = ws_events.message_event(msg_out)
+    await manager.broadcast_to_conversation(
+        await conversation_service.get_conversation_member_ids(db, conversation.id), event
+    )
+
     return ConversationOut.model_validate(conversation)
 
 
@@ -146,13 +156,22 @@ async def update_conversation(
     # Broadcast update to all members via WebSocket
     member_ids = await conversation_service.get_conversation_member_ids(db, conversation_id)
     changes = {}
+    sys_messages = []
     if data.name is not None:
         changes["group_name"] = data.name
+        sys_messages.append(f"Group name changed to {data.name}.")
     if data.avatar_url is not None:
         changes["group_avatar_url"] = data.avatar_url
+        sys_messages.append("Group photo changed.")
+        
     if changes:
         event = ws_events.conversation_updated_event(conversation_id, changes)
         await manager.broadcast_to_conversation(member_ids, event)
+        
+        for content in sys_messages:
+            sys_msg = await message_service.send_system_message(db, conversation_id, content)
+            msg_out = MessageOut.model_validate(sys_msg)
+            await manager.broadcast_to_conversation(member_ids, ws_events.message_event(msg_out))
 
     return ConversationOut.model_validate(conv)
 
@@ -188,6 +207,13 @@ async def add_member(
             conversation_id, UserOut.model_validate(new_user)
         )
         await manager.broadcast_to_conversation(member_ids, event)
+        
+        # System message
+        sys_msg = await message_service.send_system_message(
+            db, conversation_id, f"{new_user.display_name} joined the group."
+        )
+        msg_out = MessageOut.model_validate(sys_msg)
+        await manager.broadcast_to_conversation(member_ids, ws_events.message_event(msg_out))
 
     return MemberOut.model_validate(member)
 
@@ -222,3 +248,16 @@ async def remove_member(
     # Broadcast member_removed to all conversation members (including the removed user)
     event = ws_events.member_removed_event(conversation_id, user_id)
     await manager.broadcast_to_conversation(member_ids, event)
+
+    # System message
+    from app.services.user_service import get_user_by_id
+    removed_user = await get_user_by_id(db, user_id)
+    if removed_user:
+        action = "left" if is_self_removal else "was removed from"
+        sys_msg = await message_service.send_system_message(
+            db, conversation_id, f"{removed_user.display_name} {action} the group."
+        )
+        msg_out = MessageOut.model_validate(sys_msg)
+        # Broadcast to remaining members
+        current_members = await conversation_service.get_conversation_member_ids(db, conversation_id)
+        await manager.broadcast_to_conversation(current_members, ws_events.message_event(msg_out))

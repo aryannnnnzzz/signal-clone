@@ -34,6 +34,13 @@ class MessageReplyOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class MessageReactionOut(BaseModel):
+    user_id: str
+    emoji: str
+    created_at: datetime
+    model_config = {"from_attributes": True}
+
+
 class MessageOut(BaseModel):
     id: str
     conversation_id: str
@@ -45,8 +52,15 @@ class MessageOut(BaseModel):
     reply_to: MessageReplyOut | None = None
     created_at: datetime
     statuses: list[MessageStatusOut] = []
+    reactions: list[MessageReactionOut] = []
+    updated_at: datetime | None = None
+    is_deleted: bool = False
 
     model_config = {"from_attributes": True}
+
+
+class MessageEditRequest(BaseModel):
+    content: str = Field(..., min_length=1)
 
 
 class MarkReadRequest(BaseModel):

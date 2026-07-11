@@ -13,6 +13,7 @@ import {
   type WsTypingPayload,
   type WsReadReceiptPayload,
   type WsDeliveryReceiptPayload,
+  type WsReactionUpdatePayload,
 } from "@/contexts/WebSocketContext";
 import { useSettings } from "@/contexts/SettingsContext";
 
@@ -93,8 +94,10 @@ function ChatApp() {
     updatePresence,
     receiveReadReceipt,
     receiveDeliveryReceipt,
+    receiveReactionUpdate,
     markConversationAsRead,
     openNewChat,
+    openNewGroup,
   } = useChat();
 
   const { 
@@ -140,6 +143,9 @@ function ChatApp() {
       onDeliveryReceipt: (payload: WsDeliveryReceiptPayload) => {
         receiveDeliveryReceipt(payload);
       },
+      onReactionUpdate: (payload: WsReactionUpdatePayload) => {
+        receiveReactionUpdate(payload);
+      },
     });
   }, [
     user,
@@ -149,6 +155,7 @@ function ChatApp() {
     updatePresence,
     receiveReadReceipt,
     receiveDeliveryReceipt,
+    receiveReactionUpdate,
     sendMarkDelivered,
   ]);
 
@@ -179,7 +186,7 @@ function ChatApp() {
    * Wraps ChatContext.sendMessage with the WS send function and connected state.
    * ChatContext will use WS if connected, REST POST if not.
    */
-  const handleSendMessage = async (conversationId: string, content: string, contentType?: "text" | "image" | "file", replyTo?: import("@/types").Message) => {
+  const handleSendMessage = async (conversationId: string, content: string, contentType?: "text" | "image" | "file" | "voice", replyTo?: import("@/types").Message) => {
     await sendMessage(conversationId, content, sendWsMessage, isConnected, contentType, replyTo);
   };
 
@@ -190,6 +197,16 @@ function ChatApp() {
    */
   const handleNewChat = async (userId: string) => {
     const convId = await openNewChat(userId);
+    if (convId) {
+      await handleSelectConversation(convId);
+    }
+  };
+
+  /**
+   * Called when the user creates a new group.
+   */
+  const handleNewGroup = async (name: string, memberIds: string[]) => {
+    const convId = await openNewGroup(name, memberIds);
     if (convId) {
       await handleSelectConversation(convId);
     }
@@ -236,6 +253,7 @@ function ChatApp() {
       loadingMessages={loadingMessages}
       conversationsError={conversationsError}
       onNewChat={handleNewChat}
+      onNewGroup={handleNewGroup}
       typers={currentTypers}
       onTypingStart={handleTypingStart}
       onTypingStop={handleTypingStop}

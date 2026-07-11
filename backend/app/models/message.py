@@ -43,6 +43,10 @@ class Message(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_utcnow, index=True
     )
+    updated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    is_deleted: Mapped[bool] = mapped_column(default=False, server_default="0")
 
     # Relationships
     conversation: Mapped["Conversation"] = relationship(
@@ -54,6 +58,10 @@ class Message(Base):
     )
     statuses: Mapped[list["MessageStatus"]] = relationship(
         "MessageStatus", back_populates="message", lazy="selectin",
+        cascade="all, delete-orphan"
+    )
+    reactions: Mapped[list["MessageReaction"]] = relationship(
+        "MessageReaction", back_populates="message", lazy="selectin",
         cascade="all, delete-orphan"
     )
 
@@ -94,3 +102,61 @@ class MessageStatus(Base):
 
     def __repr__(self) -> str:
         return f"<MessageStatus {self.message_id} -> {self.user_id}: {self.status}>"
+
+
+class MessageReaction(Base):
+    __tablename__ = "message_reactions"
+    __table_args__ = (
+        UniqueConstraint("message_id", "user_id", "emoji", name="uq_message_user_emoji"),
+        Index("ix_message_reactions_message_id", "message_id"),
+    )
+
+    id: Mapped[str] = mapped_column(
+        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
+    )
+    message_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("messages.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    user_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    emoji: Mapped[str] = mapped_column(String(32), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow
+    )
+
+    # Relationships
+    message: Mapped["Message"] = relationship(
+        "Message", back_populates="reactions"
+    )
+    user: Mapped["User"] = relationship("User", lazy="selectin")
+
+    def __repr__(self) -> str:
+        return f"<MessageReaction {self.message_id} -> {self.user_id}: {self.emoji}>"
+
+
+class UserMessageDeletion(Base):
+    """Tracks 'Delete for Me' so messages can be hidden per user without actually deleting the record."""
+    __tablename__ = "user_message_deletions"
+    __table_args__ = (
+        UniqueConstraint("user_id", "message_id", name="uq_user_message_deletion"),
+        Index("ix_user_msg_del_user_id", "user_id"),
+    )
+
+    id: Mapped[str] = mapped_column(
+        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
+    )
+    user_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    message_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("messages.id", ondelete="CASCADE"), nullable=False
+    )
+    deleted_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow
+    )
+
+    def __repr__(self) -> str:
+        return f"<UserMessageDeletion {self.user_id} deleted {self.message_id}>"

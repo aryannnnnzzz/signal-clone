@@ -13,9 +13,10 @@ interface SettingsModalProps {
   onClose: () => void;
 }
 
-type TabType = "account" | "appearance" | "privacy" | "notifications" | "about";
+type TabType = "account" | "appearance" | "privacy" | "notifications" | "about" | "developer";
 
 export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
+  const { settings } = useSettings();
   const [activeTab, setActiveTab] = useState<TabType>("account");
   const [isClosing, setIsClosing] = useState(false);
   const [shouldRender, setShouldRender] = useState(isOpen);
@@ -122,6 +123,9 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
             <TabButton icon={<Shield size={18} />} label="Privacy" isActive={activeTab === "privacy"} onClick={() => setActiveTab("privacy")} />
             <TabButton icon={<Bell size={18} />} label="Notifications" isActive={activeTab === "notifications"} onClick={() => setActiveTab("notifications")} />
             <TabButton icon={<Info size={18} />} label="About" isActive={activeTab === "about"} onClick={() => setActiveTab("about")} />
+            {settings.developerMode && (
+              <TabButton icon={<Monitor size={18} />} label="Developer" isActive={activeTab === "developer"} onClick={() => setActiveTab("developer")} />
+            )}
           </nav>
         </div>
 
@@ -141,6 +145,7 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
             {activeTab === "privacy" && <PrivacyTab />}
             {activeTab === "notifications" && <NotificationsTab />}
             {activeTab === "about" && <AboutTab />}
+            {activeTab === "developer" && <DeveloperTab />}
           </div>
         </div>
       </div>
@@ -410,6 +415,35 @@ function AppearanceTab() {
           ))}
         </div>
       </div>
+
+      <hr className="border-signal-border my-6" />
+      
+      <div className="space-y-6">
+        <h3 className="text-sm font-medium text-signal-secondary uppercase tracking-wider">Voice Messages</h3>
+        
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <div className="text-sm font-medium text-signal-primary">Default Playback Speed</div>
+            <div className="text-sm text-signal-secondary mt-0.5">Speed for playing voice messages.</div>
+          </div>
+          <select
+            value={settings.voiceMessagePlaybackSpeed}
+            onChange={(e) => updateSetting("voiceMessagePlaybackSpeed", parseFloat(e.target.value))}
+            className="px-3 py-1.5 bg-signal-hover border border-signal-border rounded-lg text-signal-primary outline-none focus:border-signal-blue transition-colors text-sm"
+          >
+            <option value={1}>1x</option>
+            <option value={1.5}>1.5x</option>
+            <option value={2}>2x</option>
+          </select>
+        </div>
+
+        <ToggleRow 
+          label="Auto-Play Next" 
+          description="Automatically play the next voice message."
+          checked={settings.autoPlayVoiceMessages}
+          onChange={(v) => updateSetting("autoPlayVoiceMessages", v)}
+        />
+      </div>
     </div>
   );
 }
@@ -450,6 +484,32 @@ function PrivacyTab() {
 function NotificationsTab() {
   const { settings, updateSetting } = useSettings();
 
+  const handleNotificationsToggle = async (v: boolean) => {
+    if (v) {
+      // Trying to enable notifications
+      if (!("Notification" in window)) {
+        alert("This browser does not support desktop notifications.");
+        return;
+      }
+      
+      let permission = Notification.permission;
+      if (permission === "default") {
+        permission = await Notification.requestPermission();
+      }
+      
+      if (permission === "granted") {
+        updateSetting("browserNotifications", true);
+      } else {
+        // Denied
+        alert("Notification permission was denied. Please enable it in your browser settings to use this feature.");
+        updateSetting("browserNotifications", false);
+      }
+    } else {
+      // Disabling notifications
+      updateSetting("browserNotifications", false);
+    }
+  };
+
   return (
     <div className="max-w-md animate-in fade-in slide-in-from-right-4 duration-300">
       <h2 className="text-xl font-semibold text-signal-primary mb-6">Notifications</h2>
@@ -459,7 +519,7 @@ function NotificationsTab() {
           label="Browser Notifications" 
           description="Show popup notifications for new messages when Signal is in the background."
           checked={settings.browserNotifications}
-          onChange={(v) => updateSetting("browserNotifications", v)}
+          onChange={handleNotificationsToggle}
         />
         <hr className="border-signal-border" />
         <ToggleRow 
@@ -474,6 +534,8 @@ function NotificationsTab() {
 }
 
 function AboutTab() {
+  const { settings, updateSetting } = useSettings();
+
   return (
     <div className="max-w-md animate-in fade-in slide-in-from-right-4 duration-300 flex flex-col items-center text-center mt-8 mx-auto">
       <svg
@@ -504,13 +566,63 @@ function AboutTab() {
         </ul>
       </div>
 
-      <div className="mt-8 text-sm text-signal-muted space-y-3">
-        <p>Built with ❤️ by Aryan.</p>
-        <p>
+      <div className="mt-8 text-sm text-signal-muted space-y-3 w-full text-left">
+        <p className="text-center">Built with ❤️ by Aryan.</p>
+        <p className="text-center">
           <a href="https://github.com/aryannnnnzzz/signal-clone" target="_blank" rel="noopener noreferrer" className="text-signal-blue hover:underline hover:text-signal-blue-hover transition-colors">
             GitHub Repository
           </a>
         </p>
+        
+        <div className="pt-6">
+          <hr className="border-signal-border mb-6" />
+          <ToggleRow 
+            label="Developer Mode" 
+            description="Enable advanced developer settings."
+            checked={settings.developerMode}
+            onChange={(v) => updateSetting("developerMode", v)}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DeveloperTab() {
+  const handleClearStorage = () => {
+    localStorage.clear();
+    window.location.reload();
+  };
+
+  return (
+    <div className="max-w-md animate-in fade-in slide-in-from-right-4 duration-300">
+      <h2 className="text-xl font-semibold text-signal-primary mb-6">Developer</h2>
+      
+      <div className="space-y-6">
+        <div>
+          <h3 className="text-sm font-medium text-signal-primary mb-3">Clear Local Storage</h3>
+          <p className="text-sm text-signal-secondary mb-3">Clear all cached application state. You will need to log in again.</p>
+          <button 
+            onClick={handleClearStorage}
+            className="px-4 py-2 bg-signal-hover hover:bg-signal-active text-signal-primary text-sm font-medium rounded-lg transition-colors"
+          >
+            Clear Local Storage
+          </button>
+        </div>
+
+        <hr className="border-signal-border" />
+
+        <div>
+          <h3 className="text-sm font-medium text-red-400 mb-3">Reset Database</h3>
+          <p className="text-sm text-signal-secondary mb-3">Wipe all data from the database. (Simulated)</p>
+          <button 
+            onClick={() => alert("Database reset simulated.")}
+            className="flex items-center gap-2 px-4 py-2 text-red-400 bg-red-400/10 hover:bg-red-400/20 text-sm font-medium rounded-lg transition-colors"
+          >
+            <Trash2 size={16} />
+            Reset Database
+          </button>
+        </div>
       </div>
     </div>
   );

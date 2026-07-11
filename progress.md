@@ -21,6 +21,11 @@
 - [x] **Milestone 13.5:** Settings Polish ← **JUST COMPLETED**
 - [x] **Milestone 14:** Attachments (Images, Documents, Drag & Drop)
 - [x] **Milestone 15:** Reply to Messages
+- [x] **Milestone 16:** Emoji Reactions
+- [x] **Milestone 17:** Group Chats
+- [x] **Milestone 18:** Global Search
+- [x] **Milestone 19:** Desktop Notifications
+- [x] **Milestone 20:** Read receipts and unread badges polishing
 - [ ] **Milestone 12:** Deployment
 
 ## Recently Completed Work

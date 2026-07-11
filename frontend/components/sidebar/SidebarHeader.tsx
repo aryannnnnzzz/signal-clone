@@ -1,14 +1,18 @@
 "use client";
 
-import { PenSquare, Settings, LogOut } from "lucide-react";
+import { PenSquare, Settings, LogOut, Users, Search } from "lucide-react";
 import Avatar from "@/components/ui/Avatar";
 import { useAuth } from "@/contexts/AuthContext";
 
 interface SidebarHeaderProps {
   /** Called when the user clicks the "New conversation" (pen) button. */
   onNewChat: () => void;
+  /** Called when the user clicks the "New group" (users) button. */
+  onNewGroup: () => void;
   /** Called when the user clicks the Settings button. */
   onSettings: () => void;
+  /** Called to open global search. */
+  onOpenGlobalSearch: () => void;
 }
 
 /**
@@ -19,7 +23,7 @@ interface SidebarHeaderProps {
  * Now uses the real authenticated user and provides a logout button.
  * The PenSquare button is now wired to open the NewChatPanel.
  */
-export default function SidebarHeader({ onNewChat, onSettings }: SidebarHeaderProps) {
+export default function SidebarHeader({ onNewChat, onNewGroup, onSettings, onOpenGlobalSearch }: SidebarHeaderProps) {
   const { user, logout } = useAuth();
 
   return (
@@ -56,6 +60,14 @@ export default function SidebarHeader({ onNewChat, onSettings }: SidebarHeaderPr
       {/* Action icons */}
       <div className="flex items-center gap-0.5">
         <button
+          onClick={onOpenGlobalSearch}
+          className="p-1.5 rounded-full text-signal-secondary hover:text-signal-primary hover:bg-signal-hover transition-colors"
+          aria-label="Search"
+          title="Search"
+        >
+          <Search size={17} />
+        </button>
+        <button
           onClick={onNewChat}
           className="p-1.5 rounded-full text-signal-secondary hover:text-signal-primary hover:bg-signal-hover transition-colors"
           aria-label="New conversation"
@@ -63,6 +75,14 @@ export default function SidebarHeader({ onNewChat, onSettings }: SidebarHeaderPr
           id="new-chat-button"
         >
           <PenSquare size={17} />
+        </button>
+        <button
+          onClick={onNewGroup}
+          className="p-1.5 rounded-full text-signal-secondary hover:text-signal-primary hover:bg-signal-hover transition-colors"
+          aria-label="New group"
+          title="New group"
+        >
+          <Users size={17} />
         </button>
         <button
           onClick={onSettings}

@@ -43,9 +43,12 @@ import {
   fetchConversations,
   fetchMessages,
   postMessage,
+  editMessage,
+  deleteMessage,
 } from "@/lib/chatService";
-import { createOrGetDm } from "@/lib/userService";
+import { createOrGetDm, createGroup } from "@/lib/userService";
 import { useAuth } from "@/contexts/AuthContext";
+import { useSettings } from "@/contexts/SettingsContext";
 import type { Conversation, Message } from "@/types";
 import type { 
   WsMessagePayload,
@@ -53,6 +56,7 @@ import type {
   WsTypingPayload,
   WsReadReceiptPayload,
   WsDeliveryReceiptPayload,
+  WsReactionUpdatePayload,
 } from "@/contexts/WebSocketContext";
 
 /** Per-conversation typing state — a map of userId → display name. */
@@ -79,9 +83,9 @@ interface ChatContextValue {
   sendMessage: (
     conversationId: string,
     content: string,
-    wsSend?: (convId: string, content: string, contentType?: "text" | "image" | "file", replyToId?: string) => void,
+    wsSend?: (convId: string, content: string, contentType?: "text" | "image" | "file" | "voice", replyToId?: string) => void,
     wsConnected?: boolean,
-    contentType?: "text" | "image" | "file",
+    contentType?: "text" | "image" | "file" | "voice",
     replyTo?: Message
   ) => Promise<void>;
   /** Called by WebSocketContext when a `message` frame arrives. */
@@ -94,8 +98,14 @@ interface ChatContextValue {
   receiveReadReceipt: (payload: WsReadReceiptPayload) => void;
   /** Process a delivery receipt from WS */
   receiveDeliveryReceipt: (payload: WsDeliveryReceiptPayload) => void;
+  /** Process a reaction update from WS */
+  receiveReactionUpdate: (payload: WsReactionUpdatePayload) => void;
+  receiveMessageUpdate: (payload: WsMessagePayload, currentUserId: string) => void;
+  receiveMessageDelete: (messageId: string) => void;
   /** Clear unread count locally for a conversation */
   markConversationAsRead: (conversationId: string) => void;
+  /** Toggle reaction locally and send WS frame */
+  toggleReaction: (messageId: string, emoji: string, wsSendToggle: (msgId: string, emoji: string) => void) => void;
   /**
    * Open or create a DM with another user.
    * - Calls POST /api/conversations/dm (idempotent get-or-create).
@@ -103,6 +113,16 @@ interface ChatContextValue {
    * - Returns the conversation id so the caller can select it.
    */
   openNewChat: (otherUserId: string) => Promise<string | null>;
+  openNewGroup: (name: string, memberIds: string[]) => Promise<string | null>;
+  editMessageText: (conversationId: string, messageId: string, content: string) => Promise<void>;
+  deleteMessageAction: (conversationId: string, messageId: string, mode: "me" | "everyone") => Promise<void>;
+  /** ID of the message to highlight and scroll to */
+  highlightMessageId: string | null;
+  /** Jump to a specific message, loading it if necessary */
+  jumpToMessage: (conversationId: string, messageId: string, createdAt: string) => Promise<void>;
+  /** The currently active conversation ID (used to suppress notifications) */
+  activeConversationId: string | null;
+  clearActiveConversation: () => void;
 }
 
 // ─── Context ────────────────────────────────────────────────────────────────
@@ -128,6 +148,8 @@ function mapWsMessage(raw: WsMessagePayload, currentUserId: string): Message {
     // sent via WS echo back as confirmed so mark as "sent".
     status: isOwn ? "sent" : "delivered",
     createdAt: raw.created_at,
+    updatedAt: raw.updated_at,
+    isDeleted: raw.is_deleted,
     isOwn,
     replyTo: raw.reply_to ? {
       id: raw.reply_to.id,
@@ -135,6 +157,11 @@ function mapWsMessage(raw: WsMessagePayload, currentUserId: string): Message {
       content: raw.reply_to.content,
       contentType: raw.reply_to.content_type as Message["contentType"],
     } : undefined,
+    reactions: raw.reactions?.map((r) => ({
+      userId: r.user_id,
+      emoji: r.emoji,
+      createdAt: r.created_at,
+    })) || [],
   };
 }
 
@@ -142,6 +169,7 @@ function mapWsMessage(raw: WsMessagePayload, currentUserId: string): Message {
 
 export function ChatProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
+  const { settings } = useSettings();
 
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [messages, setMessages] = useState<Record<string, Message[]>>({});
@@ -152,6 +180,18 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const [messagesError, setMessagesError] = useState<string | null>(null);
   // typingUsers[conversationId][userId] = displayName
   const [typingUsers, setTypingUsers] = useState<TypingUsersMap>({});
+  const [highlightMessageId, setHighlightMessageId] = useState<string | null>(null);
+  const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
+
+  // Refs for callbacks to avoid stale closures without breaking dependencies
+  const settingsRef = useRef(settings);
+  const conversationsRef = useRef(conversations);
+  const activeConversationIdRef = useRef(activeConversationId);
+
+  useEffect(() => { settingsRef.current = settings; }, [settings]);
+  useEffect(() => { conversationsRef.current = conversations; }, [conversations]);
+  useEffect(() => { activeConversationIdRef.current = activeConversationId; }, [activeConversationId]);
+
   // Safety timers: auto-remove typers if typing_stop never arrives
   // typingTimers[conversationId_userId] = setTimeout handle
   const typingTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
@@ -180,6 +220,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     async (conversationId: string) => {
       if (!user) return;
 
+      setActiveConversationId(conversationId);
+
       // Skip re-fetch if already cached
       if (messages[conversationId]) return;
 
@@ -195,6 +237,38 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       } finally {
         setLoadingMessages(false);
       }
+    },
+    [user, messages]
+  );
+
+  const jumpToMessage = useCallback(
+    async (conversationId: string, messageId: string, createdAt: string) => {
+      if (!user) return;
+
+      const existingMsgs = messages[conversationId] || [];
+      const found = existingMsgs.find((m) => m.id === messageId);
+
+      if (!found) {
+        // Need to load the message. We fetch 50 messages before (and including) it.
+        setLoadingMessages(true);
+        try {
+          // Add 1ms to createdAt so the query (< before) includes the message itself
+          const date = new Date(createdAt);
+          date.setMilliseconds(date.getMilliseconds() + 1);
+          const data = await fetchMessages(conversationId, user.id, date.toISOString());
+          setMessages((prev) => ({ ...prev, [conversationId]: data }));
+        } catch (err) {
+          console.error("Failed to jump to message:", err);
+        } finally {
+          setLoadingMessages(false);
+        }
+      }
+
+      setHighlightMessageId(messageId);
+      // Auto-clear highlight after 3 seconds
+      setTimeout(() => {
+        setHighlightMessageId((prev) => (prev === messageId ? null : prev));
+      }, 3000);
     },
     [user, messages]
   );
@@ -256,21 +330,56 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           };
         })
       );
+
+      // Browser Notification Logic
+      if (!msg.isOwn && settingsRef.current.browserNotifications && typeof window !== "undefined" && "Notification" in window && Notification.permission === "granted") {
+        const isViewing = activeConversationIdRef.current === convId && document.hasFocus();
+        
+        if (!isViewing) {
+          const conv = conversationsRef.current.find(c => c.id === convId);
+          const title = conv?.type === "group" 
+            ? `${msg.senderName} • ${conv.name}` 
+            : msg.senderName;
+            
+          let body = msg.content;
+          if (msg.contentType === "image") {
+            try {
+              const parsed = JSON.parse(msg.content);
+              body = parsed.text ? `📷 ${parsed.text}` : "📷 Image";
+            } catch {
+              body = "📷 Image";
+            }
+          } else if (msg.contentType === "file") {
+            try {
+              const parsed = JSON.parse(msg.content);
+              body = parsed.text ? `📎 ${parsed.text}` : "📎 File";
+            } catch {
+              body = "📎 File";
+            }
+          } else if (msg.contentType === "voice") {
+            body = "🎤 Voice Message";
+          }
+
+          const notif = new Notification(title, {
+            body,
+            icon: conv?.avatarUrl || "/favicon.ico",
+            silent: !settingsRef.current.notificationSounds,
+          });
+
+          notif.onclick = () => {
+            window.focus();
+            selectConversation(convId);
+            jumpToMessage(convId, msg.id, msg.createdAt);
+            notif.close();
+          };
+        }
+      }
     },
-    []
+    [selectConversation, jumpToMessage]
   );
 
   /* ── Receive a typing indicator from WebSocket ───────── */
 
-  /**
-   * Called by WebSocketContext whenever a `typing` or `typing_stop` frame arrives.
-   *
-   * - `typing`: add user to typingUsers[convId], reset their 3-second safety timer.
-   * - `typing_stop`: remove user from typingUsers[convId], cancel their timer.
-   *
-   * Safety timer: if `typing_stop` never arrives (tab crash, network drop),
-   * the typer is removed automatically after 3 seconds.
-   */
   const receiveTyping = useCallback(
     (payload: WsTypingPayload, isStop: boolean) => {
       const { conversation_id: convId, user_id: userId, display_name: displayName } = payload;
@@ -327,23 +436,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const updatePresence = useCallback((userId: string, isOnline: boolean) => {
     setConversations((prev) =>
       prev.map((c) => {
-        // Only DM conversations expose an isOnline flag
         if (c.type !== "dm") return c;
-        // We can't directly look up which DM belongs to userId without
-        // the member list, but the conversation name is the other user's
-        // display_name. Instead we store the userId in the Conversation type
-        // as a future improvement. For now, we check isOnline property by
-        // re-fetching or trusting the mapping from the sidebar item.
-        // Since Conversation doesn't store otherUserId, we use a pragmatic
-        // approach: update all DMs whose current isOnline differs. This is
-        // safe because only the correct user's presence event will match.
-        // A future improvement: store otherUserId in Conversation.
         return c;
       })
     );
-    // Note: Full presence requires otherUserId on the Conversation type.
-    // For now we keep the method for WS wiring; see future improvement note above.
-    // The presence event still fires and can be extended when the type is updated.
     void userId;
     void isOnline;
   }, []);
@@ -358,7 +454,6 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
       let updated = false;
       const newMessages = existing.map((msg) => {
-        // Only update own messages sent before/at the read receipt timestamp
         if (msg.isOwn && msg.status !== "read" && msg.createdAt <= timestamp) {
           updated = true;
           return { ...msg, status: "read" as const };
@@ -369,6 +464,47 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       return updated ? { ...prev, [conversation_id]: newMessages } : prev;
     });
   }, []);
+
+  const receiveMessageUpdate = useCallback(
+    (payload: WsMessagePayload, currentUserId: string) => {
+      const mapped = mapWsMessage(payload, currentUserId);
+      setMessages((prev) => {
+        const convMessages = prev[mapped.conversationId] || [];
+        return {
+          ...prev,
+          [mapped.conversationId]: convMessages.map((m) =>
+            m.id === mapped.id ? mapped : m
+          ),
+        };
+      });
+      // Update last message in conversations list if it was the last message
+      setConversations((prev) =>
+        prev.map((c) => {
+          if (c.id === mapped.conversationId && c.lastMessageAt === mapped.createdAt) {
+            return {
+              ...c,
+              lastMessage: mapped.isDeleted ? "This message was deleted." : mapped.content,
+            };
+          }
+          return c;
+        })
+      );
+    },
+    []
+  );
+
+  const receiveMessageDelete = useCallback(
+    (messageId: string) => {
+      setMessages((prev) => {
+        const next = { ...prev };
+        for (const convId of Object.keys(next)) {
+          next[convId] = next[convId].filter((m) => m.id !== messageId);
+        }
+        return next;
+      });
+    },
+    []
+  );
 
   const receiveDeliveryReceipt = useCallback((payload: WsDeliveryReceiptPayload) => {
     const { message_ids } = payload;
@@ -406,15 +542,80 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     );
   }, []);
 
+  const receiveReactionUpdate = useCallback((payload: WsReactionUpdatePayload) => {
+    const { conversation_id, message_id, reactions } = payload;
+    setMessages((prev) => {
+      const existing = prev[conversation_id];
+      if (!existing) return prev;
+
+      const newMessages = existing.map((msg) => {
+        if (msg.id === message_id) {
+          return {
+            ...msg,
+            reactions: reactions.map((r) => ({
+              userId: r.user_id,
+              emoji: r.emoji,
+              createdAt: r.created_at,
+            })),
+          };
+        }
+        return msg;
+      });
+
+      return { ...prev, [conversation_id]: newMessages };
+    });
+  }, []);
+
+  const toggleReaction = useCallback((messageId: string, emoji: string, wsSendToggle: (msgId: string, e: string) => void) => {
+    if (!user) return;
+    
+    // Optimistic UI update
+    setMessages((prev) => {
+      let anyUpdated = false;
+      const next = { ...prev };
+      
+      for (const [convId, msgs] of Object.entries(prev)) {
+        const msgIdx = msgs.findIndex((m) => m.id === messageId);
+        if (msgIdx !== -1) {
+          anyUpdated = true;
+          const msg = msgs[msgIdx];
+          const existingReactions = msg.reactions || [];
+          
+          // Check if current user already reacted with this emoji
+          const hasReacted = existingReactions.some((r) => r.userId === user.id && r.emoji === emoji);
+          let newReactions;
+          
+          if (hasReacted) {
+            // Remove reaction
+            newReactions = existingReactions.filter((r) => !(r.userId === user.id && r.emoji === emoji));
+          } else {
+            // Add reaction
+            newReactions = [...existingReactions, { userId: user.id, emoji, createdAt: new Date().toISOString() }];
+          }
+          
+          const updatedMsgs = [...msgs];
+          updatedMsgs[msgIdx] = { ...msg, reactions: newReactions };
+          next[convId] = updatedMsgs;
+          break; // Found the message, no need to keep searching
+        }
+      }
+      
+      return anyUpdated ? next : prev;
+    });
+    
+    // Send to server
+    wsSendToggle(messageId, emoji);
+  }, [user]);
+
   /* ── Send a message (WS primary, REST fallback) ──────── */
 
   const sendMessage = useCallback(
     async (
       conversationId: string,
       content: string,
-      wsSend?: (convId: string, content: string, contentType?: "text" | "image" | "file", replyToId?: string) => void,
+      wsSend?: (convId: string, content: string, contentType?: "text" | "image" | "file" | "voice", replyToId?: string) => void,
       wsConnected?: boolean,
-      contentType: "text" | "image" | "file" = "text",
+      contentType: "text" | "image" | "file" | "voice" = "text",
       replyTo?: Message
     ) => {
       if (!user || !content.trim()) return;
@@ -458,14 +659,14 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         setConversations((prev) =>
           prev.map((c) => {
             let lastMessage = content.trim();
-            if (contentType === "image" || contentType === "file") {
+            if (contentType === "image" || contentType === "file" || contentType === "voice") {
               try {
                 const parsed = JSON.parse(content.trim());
                 lastMessage = parsed.text 
-                  ? (contentType === "image" ? `📷 ${parsed.text}` : `📎 ${parsed.text}`)
-                  : (contentType === "image" ? "📷 Image" : "📎 Attachment");
+                  ? (contentType === "image" ? `📷 ${parsed.text}` : (contentType === "voice" ? `🎤 Voice Message` : `📎 ${parsed.text}`))
+                  : (contentType === "image" ? "📷 Image" : (contentType === "voice" ? "🎤 Voice Message" : "📎 Attachment"));
               } catch {
-                lastMessage = contentType === "image" ? "📷 Image" : "📎 Attachment";
+                lastMessage = contentType === "image" ? "📷 Image" : (contentType === "voice" ? "🎤 Voice Message" : "📎 Attachment");
               }
             }
 
@@ -503,14 +704,14 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         setConversations((prev) =>
           prev.map((c) => {
             let lastMessage = persisted.content;
-            if (persisted.contentType === "image" || persisted.contentType === "file") {
+            if (persisted.contentType === "image" || persisted.contentType === "file" || persisted.contentType === "voice") {
               try {
                 const parsed = JSON.parse(persisted.content);
                 lastMessage = parsed.text 
-                  ? (persisted.contentType === "image" ? `📷 ${parsed.text}` : `📎 ${parsed.text}`)
-                  : (persisted.contentType === "image" ? "📷 Image" : "📎 Attachment");
+                  ? (persisted.contentType === "image" ? `📷 ${parsed.text}` : (persisted.contentType === "voice" ? `🎤 Voice Message` : `📎 ${parsed.text}`))
+                  : (persisted.contentType === "image" ? "📷 Image" : (persisted.contentType === "voice" ? "🎤 Voice Message" : "📎 Attachment"));
               } catch {
-                lastMessage = persisted.contentType === "image" ? "📷 Image" : "📎 Attachment";
+                lastMessage = persisted.contentType === "image" ? "📷 Image" : (persisted.contentType === "voice" ? "🎤 Voice Message" : "📎 Attachment");
               }
             }
             return c.id === conversationId
@@ -542,8 +743,6 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     [user]
   );
 
-  /* ── Open or create a DM conversation ───────────── */
-
   const openNewChat = useCallback(
     async (otherUserId: string): Promise<string | null> => {
       if (!user) return null;
@@ -568,6 +767,68 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     [user]
   );
 
+  const openNewGroup = useCallback(async (name: string, memberIds: string[]) => {
+    try {
+      const conv = await createGroup(name, memberIds);
+      setConversations((prev) => [
+        conv,
+        ...prev.filter((c) => c.id !== conv.id),
+      ]);
+      await selectConversation(conv.id);
+      return conv.id;
+    } catch (err) {
+      console.error("Failed to create group:", err);
+      return null;
+    }
+  }, [selectConversation]);
+
+  const editMessageText = useCallback(
+    async (conversationId: string, messageId: string, content: string) => {
+      if (!user) return;
+      try {
+        const updatedMsg = await editMessage(conversationId, messageId, content, user.id);
+        setMessages((prev) => {
+          const msgs = prev[conversationId] || [];
+          return {
+            ...prev,
+            [conversationId]: msgs.map((m) => m.id === messageId ? updatedMsg : m)
+          };
+        });
+      } catch (err) {
+        console.error("Failed to edit message:", err);
+      }
+    },
+    [user]
+  );
+
+  const deleteMessageAction = useCallback(
+    async (conversationId: string, messageId: string, mode: "me" | "everyone") => {
+      try {
+        const res = await deleteMessage(conversationId, messageId, mode);
+        if (res.success) {
+          if (mode === "me") {
+            receiveMessageDelete(messageId);
+          } else if (mode === "everyone" && res.message) {
+            setMessages((prev) => {
+              const msgs = prev[conversationId] || [];
+              return {
+                ...prev,
+                [conversationId]: msgs.map((m) => m.id === messageId ? res.message! : m)
+              };
+            });
+          }
+        }
+      } catch (err) {
+        console.error("Failed to delete message:", err);
+      }
+    },
+    [receiveMessageDelete]
+  );
+
+  const clearActiveConversation = useCallback(() => {
+    setActiveConversationId(null);
+  }, []);
+
   /* ── Value ───────────────────────────────────────────── */
 
   const value = useMemo(() => ({
@@ -579,6 +840,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     conversationsError,
     messagesError,
     typingUsers,
+    highlightMessageId,
     loadConversations,
     selectConversation,
     sendMessage,
@@ -587,8 +849,18 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     updatePresence,
     receiveReadReceipt,
     receiveDeliveryReceipt,
+    receiveReactionUpdate,
+    receiveMessageUpdate,
+    receiveMessageDelete,
     markConversationAsRead,
+    toggleReaction,
     openNewChat,
+    openNewGroup,
+    editMessageText,
+    deleteMessageAction,
+    jumpToMessage,
+    activeConversationId,
+    clearActiveConversation,
   }), [
     conversations,
     messages,
@@ -598,6 +870,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     conversationsError,
     messagesError,
     typingUsers,
+    highlightMessageId,
     loadConversations,
     selectConversation,
     sendMessage,
@@ -606,8 +879,18 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     updatePresence,
     receiveReadReceipt,
     receiveDeliveryReceipt,
+    receiveReactionUpdate,
+    receiveMessageUpdate,
+    receiveMessageDelete,
     markConversationAsRead,
+    toggleReaction,
     openNewChat,
+    openNewGroup,
+    editMessageText,
+    deleteMessageAction,
+    jumpToMessage,
+    activeConversationId,
+    clearActiveConversation,
   ]);
 
   return <ChatContext.Provider value={value}>{children}</ChatContext.Provider>;

@@ -1,6 +1,8 @@
 import { Conversation, Message } from "@/types";
 import Sidebar from "@/components/sidebar/Sidebar";
 import ChatWindow from "@/components/chat/ChatWindow";
+import GlobalSearchModal from "@/components/sidebar/GlobalSearchModal";
+import { useState, useEffect } from "react";
 
 interface AppLayoutProps {
   conversations: Conversation[];
@@ -9,12 +11,14 @@ interface AppLayoutProps {
   messages: Message[];
   onSelectConversation: (id: string) => void;
   onBack: () => void;
-  onSendMessage: (conversationId: string, content: string, contentType?: "text" | "image" | "file", replyTo?: Message) => Promise<void>;
+  onSendMessage: (conversationId: string, content: string, contentType?: "text" | "image" | "file" | "voice", replyTo?: Message) => Promise<void>;
   loadingConversations: boolean;
   loadingMessages: boolean;
   conversationsError: string | null;
   /** Called when the user selects someone from the New Chat search panel. */
   onNewChat: (userId: string, displayName: string) => void;
+  /** Called when the user creates a new group. */
+  onNewGroup: (name: string, memberIds: string[]) => void;
   /** Users currently typing in the active conversation. */
   typers: { userId: string; displayName: string }[];
   /** Forwarded to MessageComposer — fires when user starts typing. */
@@ -48,11 +52,25 @@ export default function AppLayout({
   loadingMessages,
   conversationsError,
   onNewChat,
+  onNewGroup,
   typers,
   onTypingStart,
   onTypingStop,
 }: AppLayoutProps) {
   const conversationOpen = selectedConversationId !== null;
+  const [globalSearchOpen, setGlobalSearchOpen] = useState(false);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ctrl+K or Cmd+K
+      if ((e.ctrlKey || e.metaKey) && e.key === "k") {
+        e.preventDefault();
+        setGlobalSearchOpen(true);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
 
   return (
     <div className="flex h-full w-full overflow-hidden">
@@ -70,6 +88,8 @@ export default function AppLayout({
           isLoading={loadingConversations}
           error={conversationsError}
           onNewChat={onNewChat}
+          onNewGroup={onNewGroup}
+          onOpenGlobalSearch={() => setGlobalSearchOpen(true)}
         />
       </div>
 
@@ -91,6 +111,11 @@ export default function AppLayout({
           onTypingStop={onTypingStop}
         />
       </div>
+
+      <GlobalSearchModal 
+        isOpen={globalSearchOpen} 
+        onClose={() => setGlobalSearchOpen(false)} 
+      />
     </div>
   );
 }

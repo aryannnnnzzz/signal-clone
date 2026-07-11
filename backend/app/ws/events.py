@@ -15,6 +15,18 @@ def message_event(message: MessageOut) -> dict:
     }
 
 
+def reaction_update_event(message: MessageOut) -> dict:
+    """Message reactions updated broadcast."""
+    return {
+        "type": "reaction_update",
+        "data": {
+            "message_id": message.id,
+            "conversation_id": message.conversation_id,
+            "reactions": [r.model_dump(mode="json") for r in message.reactions],
+        },
+    }
+
+
 def typing_event(conversation_id: str, user_id: str, display_name: str) -> dict:
     """User started typing in a conversation."""
     return {

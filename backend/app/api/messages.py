@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.dependencies import get_current_user, get_db
 from app.models.user import User
-from app.schemas.message import MessageCreate, MessageOut
+from app.schemas.message import MessageCreate, MessageOut, MessageEditRequest
 from app.services import conversation_service, message_service
 from app.ws import events as ws_events
 from app.ws.manager import manager
@@ -36,6 +36,7 @@ async def get_messages(
     messages = await message_service.get_messages(
         db=db,
         conversation_id=conversation_id,
+        user_id=current_user.id,
         before=before,
         limit=limit,
     )
@@ -104,3 +105,58 @@ async def mark_read(
         await manager.broadcast_to_conversation(
             member_ids, event, exclude_user_id=current_user.id
         )
+
+@router.put("/{conversation_id}/messages/{message_id}", response_model=MessageOut)
+async def edit_message(
+    conversation_id: str,
+    message_id: str,
+    data: MessageEditRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Edit a message."""
+    if not await conversation_service.is_member(db, conversation_id, current_user.id):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not a member")
+    
+    try:
+        message = await message_service.edit_message(db, message_id, current_user.id, data.content)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        
+    message_out = MessageOut.model_validate(message)
+    event = {"type": "message_update", "message": message_out.model_dump(mode="json")}
+    member_ids = await conversation_service.get_conversation_member_ids(db, conversation_id)
+    await manager.broadcast_to_conversation(member_ids, event)
+    
+    return message_out
+
+
+@router.delete("/{conversation_id}/messages/{message_id}")
+async def delete_message(
+    conversation_id: str,
+    message_id: str,
+    mode: str = Query("me", description="me or everyone"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Delete a message for me or for everyone."""
+    if not await conversation_service.is_member(db, conversation_id, current_user.id):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not a member")
+        
+    try:
+        updated_msg = await message_service.delete_message(db, message_id, current_user.id, mode)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        
+    if mode == "everyone" and updated_msg:
+        message_out = MessageOut.model_validate(updated_msg)
+        event = {"type": "message_update", "message": message_out.model_dump(mode="json")}
+        member_ids = await conversation_service.get_conversation_member_ids(db, conversation_id)
+        await manager.broadcast_to_conversation(member_ids, event)
+        return {"success": True, "message": message_out.model_dump(mode="json")}
+    elif mode == "me":
+        # Send a private event to current user's other devices to remove it
+        event = {"type": "message_delete", "message_id": message_id}
+        await manager.send_to_user(current_user.id, event)
+        return {"success": True}
+

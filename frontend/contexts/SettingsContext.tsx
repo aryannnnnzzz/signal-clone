@@ -11,6 +11,9 @@ export interface SettingsState {
   lastSeen: boolean;
   browserNotifications: boolean;
   notificationSounds: boolean;
+  developerMode: boolean;
+  voiceMessagePlaybackSpeed: number;
+  autoPlayVoiceMessages: boolean;
 }
 
 const defaultSettings: SettingsState = {
@@ -20,6 +23,9 @@ const defaultSettings: SettingsState = {
   lastSeen: true,
   browserNotifications: true,
   notificationSounds: true,
+  developerMode: false,
+  voiceMessagePlaybackSpeed: 1,
+  autoPlayVoiceMessages: false,
 };
 
 interface SettingsContextValue {

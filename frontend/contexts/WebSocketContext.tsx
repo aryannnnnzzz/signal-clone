@@ -66,7 +66,10 @@ export interface WsMessagePayload {
     content: string;
   } | null;
   created_at: string;
+  updated_at?: string;
+  is_deleted?: boolean;
   statuses: { id: string; user_id: string; status: string; timestamp: string }[];
+  reactions: { user_id: string; emoji: string; created_at: string }[];
 }
 
 export interface WsPresencePayload {
@@ -94,6 +97,12 @@ export interface WsDeliveryReceiptPayload {
   timestamp: string;
 }
 
+export interface WsReactionUpdatePayload {
+  message_id: string;
+  conversation_id: string;
+  reactions: { user_id: string; emoji: string; created_at: string }[];
+}
+
 // ─── Context shape ────────────────────────────────────────────────────────────
 
 interface WebSocketCallbacks {
@@ -102,6 +111,7 @@ interface WebSocketCallbacks {
   onTyping: (payload: WsTypingPayload, isStop: boolean) => void;
   onReadReceipt: (payload: WsReadReceiptPayload) => void;
   onDeliveryReceipt: (payload: WsDeliveryReceiptPayload) => void;
+  onReactionUpdate: (payload: WsReactionUpdatePayload) => void;
 }
 
 interface WebSocketContextValue {
@@ -110,7 +120,7 @@ interface WebSocketContextValue {
   /** Send an arbitrary JSON frame. No-op if not connected. */
   sendFrame: (frame: object) => void;
   /** Send a new_message frame for a conversation. */
-  sendWsMessage: (conversationId: string, content: string, contentType?: "text" | "image" | "file", replyToId?: string) => void;
+  sendWsMessage: (conversationId: string, content: string, contentType?: "text" | "image" | "file" | "voice", replyToId?: string) => void;
   /** Send a typing_start frame — called by MessageComposer debounce. */
   sendTypingStart: (conversationId: string) => void;
   /** Send a typing_stop frame — called after 1s inactivity or on message send. */
@@ -119,6 +129,8 @@ interface WebSocketContextValue {
   sendMarkRead: (conversationId: string) => void;
   /** Send a mark_delivered frame for specific messages. */
   sendMarkDelivered: (messageIds: string[]) => void;
+  /** Send a toggle_reaction frame */
+  sendToggleReaction: (messageId: string, emoji: string) => void;
   /**
    * Register callbacks to receive inbound frames.
    * Called once by ChatContext on mount. Replaces any previously registered
@@ -239,6 +251,12 @@ export function WebSocketProvider({ token, children }: WebSocketProviderProps) {
           break;
         }
 
+        case "reaction_update": {
+          const payload = frame.data as WsReactionUpdatePayload;
+          callbacksRef.current?.onReactionUpdate(payload);
+          break;
+        }
+
         case "error":
           console.error("[WS] Server error:", frame.data);
           break;
@@ -328,7 +346,7 @@ export function WebSocketProvider({ token, children }: WebSocketProviderProps) {
   }, []);
 
   const sendWsMessage = useCallback(
-    (conversationId: string, content: string, contentType: "text" | "image" | "file" = "text", replyToId?: string) => {
+    (conversationId: string, content: string, contentType: "text" | "image" | "file" | "voice" = "text", replyToId?: string) => {
       sendFrame({
         type: "new_message",
         conversation_id: conversationId,
@@ -368,6 +386,13 @@ export function WebSocketProvider({ token, children }: WebSocketProviderProps) {
     [sendFrame]
   );
 
+  const sendToggleReaction = useCallback(
+    (messageId: string, emoji: string) => {
+      sendFrame({ type: "toggle_reaction", message_id: messageId, emoji });
+    },
+    [sendFrame]
+  );
+
   const registerCallbacks = useCallback((callbacks: WebSocketCallbacks) => {
     callbacksRef.current = callbacks;
   }, []);
@@ -382,6 +407,7 @@ export function WebSocketProvider({ token, children }: WebSocketProviderProps) {
     sendTypingStop,
     sendMarkRead,
     sendMarkDelivered,
+    sendToggleReaction,
     registerCallbacks,
   };
 

@@ -6,6 +6,7 @@ import SidebarHeader from "./SidebarHeader";
 import SearchBar from "./SearchBar";
 import ConversationList from "./ConversationList";
 import NewChatPanel from "./NewChatPanel";
+import NewGroupPanel from "./NewGroupPanel";
 import SettingsModal from "../settings/SettingsModal";
 
 interface SidebarProps {
@@ -16,6 +17,10 @@ interface SidebarProps {
   error: string | null;
   /** Called with the chosen user id + display name to start a new DM. */
   onNewChat: (userId: string, displayName: string) => void;
+  /** Called to create a new group. */
+  onNewGroup: (name: string, memberIds: string[]) => void;
+  /** Called to open global search. */
+  onOpenGlobalSearch: () => void;
 }
 
 /**
@@ -35,9 +40,12 @@ export default function Sidebar({
   isLoading,
   error,
   onNewChat,
+  onNewGroup,
+  onOpenGlobalSearch,
 }: SidebarProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [newChatOpen, setNewChatOpen] = useState(false);
+  const [newGroupOpen, setNewGroupOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
 
   const filtered =
@@ -57,7 +65,9 @@ export default function Sidebar({
     >
       <SidebarHeader 
         onNewChat={() => setNewChatOpen(true)} 
+        onNewGroup={() => setNewGroupOpen(true)}
         onSettings={() => setSettingsOpen(true)}
+        onOpenGlobalSearch={onOpenGlobalSearch}
       />
       <SearchBar value={searchQuery} onChange={setSearchQuery} />
 
@@ -111,6 +121,14 @@ export default function Sidebar({
         onClose={() => setNewChatOpen(false)}
         onSelectUser={(userId, displayName) => {
           onNewChat(userId, displayName);
+        }}
+      />
+
+      <NewGroupPanel
+        isOpen={newGroupOpen}
+        onClose={() => setNewGroupOpen(false)}
+        onGroupCreate={(name, memberIds) => {
+          onNewGroup(name, memberIds);
         }}
       />
 

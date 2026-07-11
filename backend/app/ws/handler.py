@@ -42,6 +42,8 @@ async def handle_ws_message(
             await _handle_mark_read(data, user, websocket, db)
         elif msg_type == "mark_delivered":
             await _handle_mark_delivered(data, user, websocket, db)
+        elif msg_type == "toggle_reaction":
+            await _handle_toggle_reaction(data, user, websocket, db)
         else:
             await websocket.send_json(
                 events.error_event("UNKNOWN_TYPE", f"Unknown frame type: {msg_type}")
@@ -170,3 +172,34 @@ async def _handle_mark_delivered(
     # For simplicity, send receipt back to all members of conversations
     # that contain these messages. The frontend ignores irrelevant receipts.
     await manager.send_to_user(user.id, {"type": "delivery_ack", "data": {"message_ids": message_ids}})
+
+
+async def _handle_toggle_reaction(
+    data: dict, user: User, websocket: WebSocket, db: AsyncSession
+) -> None:
+    """Handle toggle_reaction — update DB and broadcast reaction update."""
+    message_id = data.get("message_id")
+    emoji = data.get("emoji")
+
+    if not message_id or not emoji:
+        await websocket.send_json(
+            events.error_event("INVALID_PAYLOAD", "Missing message_id or emoji")
+        )
+        return
+
+    # Toggle reaction in DB
+    message = await message_service.toggle_reaction(
+        db=db,
+        message_id=message_id,
+        user_id=user.id,
+        emoji=emoji,
+    )
+
+    message_out = MessageOut.model_validate(message)
+    event = events.reaction_update_event(message_out)
+
+    # Broadcast to all conversation members (including sender for confirmation)
+    member_ids = await conversation_service.get_conversation_member_ids(
+        db, message.conversation_id
+    )
+    await manager.broadcast_to_conversation(member_ids, event)

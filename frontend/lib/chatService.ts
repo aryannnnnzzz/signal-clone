@@ -48,6 +48,12 @@ interface BackendMessageStatusOut {
   timestamp: string;
 }
 
+interface BackendMessageReactionOut {
+  user_id: string;
+  emoji: string;
+  created_at: string;
+}
+
 interface BackendMessageOut {
   id: string;
   conversation_id: string;
@@ -64,7 +70,10 @@ interface BackendMessageOut {
     content: string;
   } | null;
   created_at: string;
+  updated_at?: string;
+  is_deleted?: boolean;
   statuses: BackendMessageStatusOut[];
+  reactions: BackendMessageReactionOut[];
 }
 
 interface BackendMemberOut {
@@ -138,8 +147,15 @@ function mapMessage(raw: BackendMessageOut, currentUserId: string): Message {
     contentType: raw.content_type as Message["contentType"],
     status: deriveMessageStatus(raw.statuses, isOwn),
     createdAt: raw.created_at,
+    updatedAt: raw.updated_at,
+    isDeleted: raw.is_deleted,
     isOwn,
     replyTo,
+    reactions: raw.reactions?.map((r) => ({
+      userId: r.user_id,
+      emoji: r.emoji,
+      createdAt: r.created_at,
+    })) || [],
   };
 }
 
@@ -225,11 +241,11 @@ export async function fetchConversations(
  */
 export async function fetchMessages(
   conversationId: string,
-  currentUserId: string
+  currentUserId: string,
+  before?: string
 ): Promise<Message[]> {
-  const raw = await apiRequest<BackendMessageOut[]>(
-    `/api/conversations/${conversationId}/messages?limit=50`
-  );
+  const url = `/api/conversations/${conversationId}/messages?limit=50${before ? `&before=${encodeURIComponent(before)}` : ''}`;
+  const raw = await apiRequest<BackendMessageOut[]>(url);
   return raw.map((msg) => mapMessage(msg, currentUserId));
 }
 
@@ -242,7 +258,7 @@ export async function postMessage(
   conversationId: string,
   content: string,
   currentUserId: string,
-  contentType: "text" | "image" | "file" = "text",
+  contentType: "text" | "image" | "file" | "voice" = "text",
   replyToId?: string
 ): Promise<Message> {
   const raw = await apiRequest<BackendMessageOut>(
@@ -253,4 +269,73 @@ export async function postMessage(
     }
   );
   return mapMessage(raw, currentUserId);
+}
+
+/**
+ * PUT /api/conversations/{conversationId}/messages/{messageId}
+ *
+ * Edits a text message.
+ */
+export async function editMessage(
+  conversationId: string,
+  messageId: string,
+  content: string,
+  currentUserId: string
+): Promise<Message> {
+  const raw = await apiRequest<BackendMessageOut>(
+    `/api/conversations/${conversationId}/messages/${messageId}`,
+    {
+      method: "PUT",
+      body: { content },
+    }
+  );
+  return mapMessage(raw, currentUserId);
+}
+
+/**
+ * DELETE /api/conversations/{conversationId}/messages/{messageId}
+ *
+ * Deletes a message (for me or everyone).
+ */
+export async function deleteMessage(
+  conversationId: string,
+  messageId: string,
+  mode: "me" | "everyone" = "me"
+): Promise<{ success: boolean; message?: Message }> {
+  const raw = await apiRequest<{ success: boolean; message?: BackendMessageOut }>(
+    `/api/conversations/${conversationId}/messages/${messageId}?mode=${mode}`,
+    {
+      method: "DELETE",
+    }
+  );
+  
+  if (raw.message && raw.success) {
+    // We mock currentUserId here since it's just returning the deleted tombstone 
+    // and the sender is the one who deleted it.
+    const mapped = mapMessage(raw.message, raw.message.sender_id || "");
+    return { success: true, message: mapped };
+  }
+  return { success: raw.success };
+}
+
+/**
+ * GET /api/search/messages
+ *
+ * Searches messages globally or within a specific conversation.
+ */
+export async function searchMessages(
+  query: string,
+  currentUserId: string,
+  conversationId?: string
+): Promise<Message[]> {
+  const url = new URL("/api/search/messages", "http://localhost");
+  url.searchParams.set("q", query);
+  if (conversationId) {
+    url.searchParams.set("conversation_id", conversationId);
+  }
+  
+  const raw = await apiRequest<BackendMessageOut[]>(
+    url.pathname + url.search
+  );
+  return raw.map((msg) => mapMessage(msg, currentUserId));
 }

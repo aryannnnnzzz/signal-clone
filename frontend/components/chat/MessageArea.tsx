@@ -5,6 +5,9 @@ import { ConversationType, Message } from "@/types";
 import MessageBubble from "./MessageBubble";
 import TypingIndicator from "./TypingIndicator";
 import { getDateLabel, isNewDay } from "@/lib/utils";
+import { useChat } from "@/contexts/ChatContext";
+import { useWebSocket } from "@/contexts/WebSocketContext";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface MessageAreaProps {
   messages: Message[];
@@ -30,6 +33,9 @@ export default function MessageArea({
   onReply,
 }: MessageAreaProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
+  const { toggleReaction } = useChat();
+  const { sendToggleReaction } = useWebSocket();
+  const { user } = useAuth();
 
   // Scroll to latest message on mount and whenever messages update
   useEffect(() => {
@@ -47,8 +53,15 @@ export default function MessageArea({
         const showDateSeparator =
           index === 0 || isNewDay(prevMessage.createdAt, message.createdAt);
 
+        const isSystem = message.contentType === "system";
         const showSenderName =
-          conversationType === "group" && !message.isOwn;
+          conversationType === "group" &&
+          !message.isOwn &&
+          !isSystem &&
+          (index === 0 || 
+           prevMessage?.senderId !== message.senderId || 
+           prevMessage?.contentType === "system" || 
+           showDateSeparator);
 
         return (
           <div key={message.id}>
@@ -65,6 +78,8 @@ export default function MessageArea({
               message={message}
               showSenderName={showSenderName}
               onReply={onReply}
+              onToggleReaction={(msgId, emoji) => toggleReaction(msgId, emoji, sendToggleReaction)}
+              currentUserId={user?.id}
             />
           </div>
         );

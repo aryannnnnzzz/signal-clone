@@ -1,11 +1,15 @@
 import { Phone, Video, Search, MoreVertical, ArrowLeft } from "lucide-react";
 import { Conversation } from "@/types";
 import Avatar from "@/components/ui/Avatar";
+import { useState } from "react";
+import GroupSettingsModal from "./GroupSettingsModal";
 
 interface ChatHeaderProps {
   conversation: Conversation;
   /** Callback to close the chat and return to the conversation list (mobile) */
   onBack: () => void;
+  /** Callback to open the local search panel */
+  onSearchClick: () => void;
 }
 
 /**
@@ -17,7 +21,9 @@ interface ChatHeaderProps {
  * - Name and subtitle (Online / Last seen / N members)
  * - Action icons: Voice call, Video call, Search, More
  */
-export default function ChatHeader({ conversation, onBack }: ChatHeaderProps) {
+export default function ChatHeader({ conversation, onBack, onSearchClick }: ChatHeaderProps) {
+  const [isGroupSettingsOpen, setIsGroupSettingsOpen] = useState(false);
+
   const subtitle =
     conversation.type === "group"
       ? `${conversation.memberCount ?? 0} members`
@@ -42,7 +48,12 @@ export default function ChatHeader({ conversation, onBack }: ChatHeaderProps) {
         </button>
 
         {/* Avatar */}
-        <div className="relative flex-shrink-0 cursor-pointer">
+        <div 
+          className="relative flex-shrink-0 cursor-pointer"
+          onClick={() => {
+            if (conversation.type === "group") setIsGroupSettingsOpen(true);
+          }}
+        >
           <Avatar name={conversation.name} size="md" />
           {showOnlineDot && (
             <span
@@ -53,7 +64,12 @@ export default function ChatHeader({ conversation, onBack }: ChatHeaderProps) {
         </div>
 
         {/* Name + subtitle */}
-        <div className="min-w-0 cursor-pointer">
+        <div 
+          className="min-w-0 cursor-pointer"
+          onClick={() => {
+            if (conversation.type === "group") setIsGroupSettingsOpen(true);
+          }}
+        >
           <h1 className="text-signal-primary font-semibold text-[15px] truncate leading-tight">
             {conversation.name}
           </h1>
@@ -86,6 +102,7 @@ export default function ChatHeader({ conversation, onBack }: ChatHeaderProps) {
           <Video size={18} />
         </button>
         <button
+          onClick={onSearchClick}
           className="p-2 rounded-full text-signal-secondary hover:text-signal-primary hover:bg-signal-hover transition-colors"
           aria-label="Search in conversation"
           title="Search in conversation"
@@ -100,6 +117,12 @@ export default function ChatHeader({ conversation, onBack }: ChatHeaderProps) {
           <MoreVertical size={18} />
         </button>
       </div>
+
+      <GroupSettingsModal 
+        conversation={conversation}
+        isOpen={isGroupSettingsOpen}
+        onClose={() => setIsGroupSettingsOpen(false)}
+      />
     </header>
   );
 }

@@ -90,3 +90,30 @@ export async function createOrGetDm(
     isOnline,
   };
 }
+
+/**
+ * POST /api/conversations/group
+ *
+ * Creates a new group conversation.
+ */
+export async function createGroup(
+  name: string,
+  memberIds: string[],
+): Promise<Conversation> {
+  const raw = await apiRequest<BackendDmOut>("/api/conversations/group", {
+    method: "POST",
+    body: { name, member_ids: memberIds },
+  });
+
+  return {
+    id: raw.id,
+    type: "group",
+    name: raw.group_name ?? "Group",
+    avatarUrl: raw.group_avatar_url ?? undefined,
+    lastMessage: undefined,
+    lastMessageAt: raw.updated_at,
+    lastMessageIsOwn: undefined,
+    unreadCount: 0,
+    memberCount: raw.members.length,
+  };
+}

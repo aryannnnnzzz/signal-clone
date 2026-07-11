@@ -1,6 +1,6 @@
 export type MessageStatus = "sending" | "sent" | "delivered" | "read";
 export type ConversationType = "dm" | "group";
-export type ContentType = "text" | "image" | "file";
+export type ContentType = "text" | "image" | "file" | "voice" | "system";
 
 /**
  * Mirrors the backend UserOut Pydantic schema.
@@ -28,6 +28,12 @@ export interface User {
   lastSeenAt: string;
 }
 
+export interface Reaction {
+  userId: string;
+  emoji: string;
+  createdAt?: string;
+}
+
 export interface Message {
   id: string;
   conversationId: string;
@@ -39,6 +45,8 @@ export interface Message {
   /** Delivery/read status — only meaningful for own messages */
   status: MessageStatus;
   createdAt: string;
+  updatedAt?: string;
+  isDeleted?: boolean;
   /** True when this message was sent by the current logged-in user */
   isOwn: boolean;
   /** The message this message is replying to, if any */
@@ -48,6 +56,7 @@ export interface Message {
     content: string;
     contentType: ContentType;
   };
+  reactions?: Reaction[];
 }
 
 export interface Conversation {

@@ -5,12 +5,14 @@ import MessageArea from "./MessageArea";
 import MessageComposer from "./MessageComposer";
 import EmptyState from "@/components/ui/EmptyState";
 import { Loader2 } from "lucide-react";
+import ConversationSearchPanel from "./ConversationSearchPanel";
+import { useEffect } from "react";
 
 interface ChatWindowProps {
   conversation: Conversation | null;
   messages: Message[];
   onBack: () => void;
-  onSendMessage: (conversationId: string, content: string, contentType?: "text" | "image" | "file", replyTo?: Message) => Promise<void>;
+  onSendMessage: (conversationId: string, content: string, contentType?: "text" | "image" | "file" | "voice", replyTo?: Message) => Promise<void>;
   isLoadingMessages: boolean;
   /** Users currently typing in the active conversation. */
   typers: { userId: string; displayName: string }[];
@@ -41,20 +43,48 @@ export default function ChatWindow({
   onTypingStop,
 }: ChatWindowProps) {
   const [replyingToMessage, setReplyingToMessage] = useState<Message | null>(null);
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ctrl+F or Cmd+F
+      if ((e.ctrlKey || e.metaKey) && e.key === "f") {
+        e.preventDefault();
+        setIsSearchOpen(true);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
+  // When switching conversations, close search
+  useEffect(() => {
+    setIsSearchOpen(false);
+  }, [conversation?.id]);
 
   if (!conversation) {
     return <EmptyState />;
   }
 
-  const handleSend = async (content: string, contentType?: "text" | "image" | "file") => {
+  const handleSend = async (content: string, contentType?: "text" | "image" | "file" | "voice") => {
     const currentReply = replyingToMessage;
     setReplyingToMessage(null); // Clear immediately
     await onSendMessage(conversation.id, content, contentType, currentReply ?? undefined);
   };
 
   return (
-    <main className="flex flex-col flex-1 h-full overflow-hidden bg-signal-chat">
-      <ChatHeader conversation={conversation} onBack={onBack} />
+    <main className="relative flex flex-col flex-1 h-full overflow-hidden bg-signal-chat">
+      <ChatHeader 
+        conversation={conversation} 
+        onBack={onBack} 
+        onSearchClick={() => setIsSearchOpen(!isSearchOpen)}
+      />
+      {isSearchOpen && (
+        <ConversationSearchPanel 
+          conversationId={conversation.id} 
+          onClose={() => setIsSearchOpen(false)} 
+        />
+      )}
 
       {/* ── Message area or loader ─────────────────────── */}
       {isLoadingMessages ? (

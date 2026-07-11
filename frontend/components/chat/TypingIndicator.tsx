@@ -33,16 +33,7 @@ export default function TypingIndicator({ typers }: TypingIndicatorProps) {
     label =
       typers[0].displayName + " and " + typers[1].displayName + " are typing";
   } else {
-    const others = typers.length - 2;
-    label =
-      typers[0].displayName +
-      ", " +
-      typers[1].displayName +
-      " and " +
-      others +
-      " other" +
-      (others > 1 ? "s" : "") +
-      " are typing";
+    label = typers.length + " people are typing";
   }
 
   return (
