@@ -3,11 +3,14 @@
 import { useEffect, useRef } from "react";
 import { ConversationType, Message } from "@/types";
 import MessageBubble from "./MessageBubble";
+import TypingIndicator from "./TypingIndicator";
 import { getDateLabel, isNewDay } from "@/lib/utils";
 
 interface MessageAreaProps {
   messages: Message[];
   conversationType: ConversationType;
+  /** Users currently typing in this conversation. */
+  typers: { userId: string; displayName: string }[];
 }
 
 /**
@@ -21,6 +24,7 @@ interface MessageAreaProps {
 export default function MessageArea({
   messages,
   conversationType,
+  typers,
 }: MessageAreaProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -63,6 +67,9 @@ export default function MessageArea({
       })}
 
       {/* Invisible scroll anchor */}
+      {typers.length > 0 && (
+        <TypingIndicator typers={typers} />
+      )}
       <div ref={bottomRef} />
     </div>
   );

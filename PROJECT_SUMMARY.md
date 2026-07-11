@@ -85,13 +85,22 @@ The application utilises a layered, client-server architecture:
   - New chat flow integrates cleanly via `openNewChat` action in `ChatContext`.
   - Side-bar UI correctly handles starting new conversations and jumping to existing DMs.
 
+✅ **Real-time Typing Indicators (Milestone 11):**
+  - `TypingIndicator.tsx` — animated three-dot pulse, handles 0/1/2/3+ concurrent typers.
+  - `ChatContext.receiveTyping()` — updates `typingUsers` state; 3-second safety auto-remove timer.
+  - `WebSocketContext` extended with `sendTypingStart()` / `sendTypingStop()` helpers.
+  - `MessageComposer` debounce: 400ms before first `typing_start`, 1s stop timer, immediate stop on send.
+  - No backend changes needed — all WS event handlers already existed.
+  - Multiple simultaneous typers handled correctly in a single state Map.
+  - Zero memory leaks: all timers tracked via `useRef`, cleaned up on unmount.
+
 ## Pending Features
 ❌ **Deployment:** Host frontend on Vercel, backend on Render/Railway.
 ❌ **README:** Comprehensive documentation.
 
 ## Current Progress
-**~95% Complete.**
-The entire backend and full frontend (auth + chat REST API + real-time WebSocket + new chat flow) are built and connected. Two browser windows can exchange messages in real time. The next phase is deployment and documentation.
+**~98% Complete.**
+The entire backend and full frontend (auth + chat REST API + real-time WebSocket + new chat flow + typing indicators) are built and connected. Two browser windows can exchange messages in real time and see each other's typing indicators. The next phase is deployment and documentation.
 
 ## Next Milestone
-**Milestone 11: Deployment** — Deploy backend to Render/Railway, frontend to Vercel/Netlify.
+**Milestone 12: Deployment** — Deploy backend to Render/Railway, frontend to Vercel/Netlify.

@@ -15,6 +15,12 @@ interface AppLayoutProps {
   conversationsError: string | null;
   /** Called when the user selects someone from the New Chat search panel. */
   onNewChat: (userId: string, displayName: string) => void;
+  /** Users currently typing in the active conversation. */
+  typers: { userId: string; displayName: string }[];
+  /** Forwarded to MessageComposer — fires when user starts typing. */
+  onTypingStart: () => void;
+  /** Forwarded to MessageComposer — fires when user stops typing or sends. */
+  onTypingStop: () => void;
 }
 
 /**
@@ -42,6 +48,9 @@ export default function AppLayout({
   loadingMessages,
   conversationsError,
   onNewChat,
+  typers,
+  onTypingStart,
+  onTypingStop,
 }: AppLayoutProps) {
   const conversationOpen = selectedConversationId !== null;
 
@@ -77,6 +86,9 @@ export default function AppLayout({
           onBack={onBack}
           onSendMessage={onSendMessage}
           isLoadingMessages={loadingMessages}
+          typers={typers}
+          onTypingStart={onTypingStart}
+          onTypingStop={onTypingStop}
         />
       </div>
     </div>

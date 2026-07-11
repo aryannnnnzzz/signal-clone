@@ -81,15 +81,17 @@ function ChatApp() {
     loadingConversations,
     loadingMessages,
     conversationsError,
+    typingUsers,
     loadConversations,
     selectConversation,
     sendMessage,
     receiveMessage,
+    receiveTyping,
     updatePresence,
     openNewChat,
   } = useChat();
 
-  const { isConnected, sendWsMessage, registerCallbacks } = useWebSocket();
+  const { isConnected, sendWsMessage, sendTypingStart, sendTypingStop, registerCallbacks } = useWebSocket();
   const { user } = useAuth();
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -105,12 +107,12 @@ function ChatApp() {
       onPresence: (payload: WsPresencePayload) => {
         updatePresence(payload.user_id, payload.is_online);
       },
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      onTyping: (_payload: WsTypingPayload, _isStop: boolean) => {
-        // Typing indicators — UI not yet implemented, silently handled
+      onTyping: (payload: WsTypingPayload, isStop: boolean) => {
+        console.log("[DEBUG] receiveTyping payload:", payload, "isStop:", isStop);
+        receiveTyping(payload, isStop);
       },
     });
-  }, [user, registerCallbacks, receiveMessage, updatePresence]);
+  }, [user, registerCallbacks, receiveMessage, receiveTyping, updatePresence]);
 
   /* ── Load conversations on mount ─────────────────── */
   useEffect(() => {
@@ -143,6 +145,27 @@ function ChatApp() {
     }
   };
 
+  /** Derive typers for the currently selected conversation. */
+  const currentTypers = selectedId
+    ? Object.entries(typingUsers[selectedId] ?? {}).map(([userId, displayName]) => ({
+        userId,
+        displayName,
+      }))
+    : [];
+
+  /** Send typing_start for the active conversation (no-op if none selected). */
+  const handleTypingStart = () => {
+    console.log("[DEBUG] handleTypingStart called. selectedId:", selectedId, "isConnected:", isConnected);
+    if (selectedId && isConnected) sendTypingStart(selectedId);
+  };
+
+  /** Send typing_stop for the active conversation (no-op if none selected). */
+  const handleTypingStop = () => {
+    console.log("[DEBUG] handleTypingStop called. selectedId:", selectedId, "isConnected:", isConnected);
+    if (selectedId && isConnected) sendTypingStop(selectedId);
+  };
+
+
   const selectedConversation =
     conversations.find((c) => c.id === selectedId) ?? null;
 
@@ -161,6 +184,9 @@ function ChatApp() {
       loadingMessages={loadingMessages}
       conversationsError={conversationsError}
       onNewChat={handleNewChat}
+      typers={currentTypers}
+      onTypingStart={handleTypingStart}
+      onTypingStop={handleTypingStop}
     />
   );
 }

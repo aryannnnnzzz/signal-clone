@@ -10,15 +10,80 @@
 ---
 
 # Current Project Status
-- **Overall completion:** ~95%
+- **Overall completion:** ~98%
 - **Backend completion:** 100% (Fully tested and verified)
-- **Frontend completion:** ~97% (Auth, Chat REST, WebSocket, User Search & New Chat all complete)
+- **Frontend completion:** ~99% (Auth, Chat REST, WebSocket, User Search, New Chat, Typing Indicators all complete)
 - **Deployment completion:** 0%
 - **README completion:** 0%
 
 ---
 
-# What Was Built (User Search & New Chat — Milestone 10.5)
+# What Was Built (Typing Indicators — Milestone 11)
+
+## Milestone 11 — New Files
+```
+frontend/components/chat/TypingIndicator.tsx ← Animated three-dot typing indicator;
+                                               handles 0/1/2/3+ typers;
+                                               uses typingBounce CSS keyframe
+```
+
+## Milestone 11 — Modified Files
+```
+frontend/contexts/ChatContext.tsx     ← Added typingUsers: TypingUsersMap state;
+                                        Added receiveTyping(payload, isStop) action;
+                                        3-second safety auto-remove timer via useRef
+frontend/contexts/WebSocketContext.tsx← Added sendTypingStart(convId) helper;
+                                        Added sendTypingStop(convId) helper
+frontend/components/chat/MessageComposer.tsx
+                                      ← Added onTypingStart/onTypingStop props;
+                                        debounceRef fires typing_start 400ms after first key;
+                                        stopRef fires typing_stop 1s after last key;
+                                        handleSend immediately fires typing_stop;
+                                        all timers cleared on unmount (no memory leaks)
+frontend/components/chat/MessageArea.tsx
+                                      ← Added typers prop; renders <TypingIndicator>
+frontend/components/chat/ChatWindow.tsx
+                                      ← Added typers/onTypingStart/onTypingStop props;
+                                        forwards to MessageArea and MessageComposer
+frontend/components/layout/AppLayout.tsx
+                                      ← Threads typers/onTypingStart/onTypingStop
+frontend/app/page.tsx                 ← Wires onTyping callback to receiveTyping;
+                                        derives currentTypers from typingUsers[selectedId];
+                                        handleTypingStart/Stop guard on selectedId + isConnected
+frontend/app/globals.css              ← Added typingBounce @keyframes animation
+```
+
+## Typing Indicator Data Flow
+```
+User types in MessageComposer
+  → debounceRef fires after 400ms
+    → onTypingStart() fires
+      → handleTypingStart() (page.tsx) — guards: selectedId && isConnected
+        → sendTypingStart(convId) — WebSocketContext
+          → sendFrame({ type: 'typing_start', conversation_id })
+            → Backend: _handle_typing_start() broadcasts { type: 'typing', data: { conversation_id, user_id, display_name } }
+              → All other members' WebSocketContext.onmessage dispatches to onTyping()
+                → receiveTyping(payload, false) — ChatContext
+                  → typingUsers[convId][userId] = displayName
+                  → Safety timer (3s) scheduled to auto-remove if typing_stop never arrives
+                    → TypingIndicator renders 'Alice is typing...'
+
+User stops typing for 1 second
+  → stopRef fires → onTypingStop() → sendTypingStop(convId)
+    → Backend broadcasts typing_stop → receiveTyping(payload, true)
+      → typingUsers[convId][userId] deleted
+        → TypingIndicator disappears
+
+User sends message
+  → handleSend(): timers cleared immediately, onTypingStop() fired before await onSend()
+    → TypingIndicator disappears in all tabs
+
+Tab crash / network loss (safety net)
+  → typing_stop never arrives
+  → 3s safety timer fires → typingUsers entry deleted → indicator disappears
+```
+
+## Previous Milestone: User Search & New Chat (Milestone 10.5)
 
 ## Milestone 10.5 — New Files
 ```
@@ -186,7 +251,7 @@ only creates conversations *between the 5 seed users*.
 - **Framework:** Next.js 15 App Router
 - **Language:** TypeScript
 - **Styling:** TailwindCSS v4 (`@import "tailwindcss"` / `@theme inline`)
-- **State:** AuthContext (auth), ChatContext (conversations/messages), WebSocketContext (WS lifecycle)
+- **State:** AuthContext (auth), ChatContext (conversations/messages/typingUsers), WebSocketContext (WS lifecycle)
 
 ## Layered Architecture
 1. **API/Routers (`app/api/`)**: Handle HTTP requests/responses, authorization, and route to services.
@@ -229,7 +294,7 @@ frontend/
 │   └── ui/                 # Avatar, StatusIcon, EmptyState
 ├── contexts/
 │   ├── AuthContext.tsx     # JWT auth state & session restore
-│   ├── ChatContext.tsx     # Conversations, messages, WS-aware sendMessage
+│   ├── ChatContext.tsx     # Conversations, messages, typingUsers, WS-aware sendMessage
 │   └── WebSocketContext.tsx← NEW: persistent WS lifecycle, reconnect, frame dispatch
 ├── data/
 │   └── mockData.ts         # Kept for reference; not used in production app
@@ -342,8 +407,8 @@ frontend/
 - Message sending via WebSocket (REST fallback when disconnected).
 - Cursor-based message pagination.
 - Per-recipient delivery and read receipt tracking.
-- Ephemeral typing indicators.
-- Online/offline presence broadcasting.
+- **Ephemeral typing indicators:** ✅ Frontend now fully implemented
+- **Online/offline presence broadcasting.**
 - Database seeding with mock data.
 - Complete multi-step authentication UI flow (6 screens).
 - Chat UI shell with 21 components, responsive, Signal-faithful design.
@@ -367,7 +432,7 @@ All the following features have been manually tested against the running server 
 - ✅ Avatar upload (drag-and-drop + file select) verified
 - ✅ No hydration errors (deterministic timestamps + pinned en-GB locale)
 - ✅ WebSocket connects with JWT token (verified via backend logs)
-- ✅ `npm run build` clean after Milestone 10
+- ✅ `npm run build` clean after Milestone 11 (Typing Indicators)
 
 ---
 
@@ -412,31 +477,34 @@ All the following features have been manually tested against the running server 
 
 # Git Status
 - **Latest branch:** `main`
-- **Latest commit message:** `Complete backend scaffold and authentication`
+- **Latest commit message:** `feat(frontend): implement user search, new chat flow and websocket client`
 - **GitHub repository status:** Behind
 - **Suggested commit for this session:**
   ```
-  feat(frontend): implement Milestone 10 — WebSocket real-time client
+  feat(frontend): implement Milestone 11 — typing indicators
 
-  Add WebSocketContext.tsx with JWT-authenticated WS connection to
-  ws://localhost:8000/ws?token=<jwt>. Implements exponential back-off
-  reconnect (1s→30s cap), inbound frame dispatch (message, presence,
-  typing, typing_stop), and sendWsMessage() for new_message frames.
+  Add real-time typing indicators using existing WebSocket infrastructure.
+  No backend changes — typing_start/typing_stop events already handled.
 
-  Update ChatContext.tsx: add receiveMessage() (dedup by id, replaces
-  optimistic entries from sender echo), updatePresence(), and modify
-  sendMessage() to use WS as primary path with REST POST fallback when
-  disconnected.
+  Add TypingIndicator.tsx: animated 3-dot pulse, handles 0/1/2/3+ typers.
+  Add typingBounce @keyframes to globals.css.
 
-  Update page.tsx: wrap authenticated UI in <WebSocketProvider> inside
-  <ChatProvider>; wire onMessage/onPresence/onTyping callbacks to
-  ChatContext in ChatApp useEffect.
+  Extend ChatContext: typingUsers state (Record<convId, Record<userId, name>>),
+  receiveTyping() action with 3s safety auto-remove timer (useRef, no leak).
 
-  Backend unchanged. npm run build: ✓ Compiled successfully.
+  Extend WebSocketContext: sendTypingStart()/sendTypingStop() helpers.
+
+  MessageComposer: debounce 400ms (typing_start), 1s stop timer (typing_stop),
+  immediate stop on send; all timers cleared on unmount.
+
+  Thread props: MessageArea -> ChatWindow -> AppLayout -> page.tsx.
+  Wire onTyping callback: receiveTyping(). Guard: selectedId && isConnected.
+
+  npm run build: Compiled successfully, zero TS/lint errors.
   ```
 
 ---
 
 # Next Milestone
-**Milestone 11: Deployment** — Deploy backend to Render/Railway, frontend to Vercel/Netlify.
+**Milestone 12: Deployment** — Deploy backend to Render/Railway, frontend to Vercel/Netlify.
 Or: **README** — Write comprehensive documentation.

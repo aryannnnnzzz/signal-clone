@@ -1,7 +1,7 @@
 # Signal Clone — Engineering Progress Log
 
 ## Overall Progress
-**Completion:** ~95%
+**Completion:** ~98%
 
 ## Milestones
 - [x] **Milestone 1:** Project setup & repository scaffold
@@ -14,10 +14,52 @@
 - [x] **Milestone 8:** Frontend Auth API integration (REST calls for login/register/OTP)
 - [x] **Milestone 9:** Frontend Chat API integration (REST calls for messages/conversations)
 - [x] **Milestone 10:** Real-time chat integration (WebSocket client)
-- [x] **Milestone 10.5:** User Search & New Conversation Flow ← **JUST COMPLETED**
-- [ ] **Milestone 11:** Deployment
+- [x] **Milestone 10.5:** User Search & New Conversation Flow
+- [x] **Milestone 11:** Typing Indicators ← **JUST COMPLETED**
+- [ ] **Milestone 12:** Deployment
 
 ## Recently Completed Work
+
+### **[Milestone 11]** Typing Indicators
+- No backend changes — typing_start/typing_stop WS events already fully implemented in backend.
+
+- Created `frontend/components/chat/TypingIndicator.tsx`:
+  - Renders null when no one is typing (zero overhead).
+  - Handles 0/1/2/3+ concurrent typers with correct grammar.
+  - Animated 3-dot bounce via `typingBounce` CSS keyframes.
+  - Fully accessible: `aria-live="polite"`, `role="status"`, `aria-label`.
+
+- Added `typingBounce` keyframe to `frontend/app/globals.css`.
+
+- Extended `frontend/contexts/ChatContext.tsx`:
+  - Added `typingUsers: TypingUsersMap` state (`Record<convId, Record<userId, displayName>>`).
+  - Added `receiveTyping(payload, isStop)` action.
+  - Typing start: adds user to `typingUsers`, schedules 3-second safety auto-remove timer.
+  - Typing stop: removes user, cancels their timer. No memory leaks (timers in `useRef`).
+
+- Extended `frontend/contexts/WebSocketContext.tsx`:
+  - Added `sendTypingStart(conversationId)` — wraps `sendFrame({ type: 'typing_start', ... })`.
+  - Added `sendTypingStop(conversationId)` — wraps `sendFrame({ type: 'typing_stop', ... })`.
+
+- Modified `frontend/components/chat/MessageComposer.tsx`:
+  - Added `onTypingStart` / `onTypingStop` props.
+  - `debounceRef`: fires `onTypingStart` 400ms after first keystroke (not on every key).
+  - `stopRef`: fires `onTypingStop` 1s after last keystroke.
+  - `isTypingRef`: prevents duplicate typing_start sends in the same burst.
+  - `handleSend`: immediately clears timers and fires `onTypingStop` before sending.
+  - All timers cleaned up on unmount via `useEffect` return. Zero memory leaks.
+
+- Threaded props: `MessageArea` → `ChatWindow` → `AppLayout` → `page.tsx`.
+
+- Modified `frontend/app/page.tsx`:
+  - Wired `onTyping` callback to call `receiveTyping(payload, isStop)`.
+  - Derives `currentTypers` from `typingUsers[selectedId]`.
+  - `handleTypingStart/Stop`: guards on `selectedId && isConnected`.
+  - Passes `typers`, `onTypingStart`, `onTypingStop` to `AppLayout`.
+
+- Production build verified: `Compiled successfully` — zero TypeScript errors, zero lint errors.
+
+## Previous Work
 
 ### **[Milestone 10.5]** User Search & New Conversation Flow
 - Created `frontend/lib/userService.ts`:
@@ -93,36 +135,39 @@
 | **Frontend Chat API Integration** | ✅ Complete | REST calls wired; conversations & messages from live backend |
 | **WebSocket Client** | ✅ Complete | JWT auth, exponential back-off reconnect, live messaging |
 | **User Search & New Chat** | ✅ Complete | Search panel, DM creation, auto-select, sidebar upsert |
+| **Typing Indicators** | ✅ Complete | Debounced WS events, animated indicator, multi-user, auto-remove |
 | **Testing** | ⚠️ Partial | Backend manually tested, no unit tests yet |
 | **Deployment** | ❌ Pending | Nothing deployed yet |
 
 ## GitHub Status
-- **Latest Commit:** `Complete backend scaffold and authentication`
-- **Branch:** `main` (Behind — Milestones 6-10.5 not yet committed)
+- **Latest Commit:** `feat(frontend): implement user search, new chat flow and websocket client`
+- **Branch:** `main` (Behind — Milestones 6-11 not yet committed)
 - **Suggested commit:**
   ```
-  feat(frontend): implement Milestone 10.5 — user search & new chat flow
+  feat(frontend): implement Milestone 11 — typing indicators
 
-  Add lib/userService.ts with searchUsers() (GET /api/users/search) and
-  createOrGetDm() (POST /api/conversations/dm). No backend changes needed.
+  Add real-time typing indicators using existing WebSocket infrastructure.
+  No backend changes — typing_start/typing_stop events already handled.
 
-  Add NewChatPanel component: debounced search overlay inside Sidebar,
-  keyboard-accessible (Escape closes, auto-focus), filters out current
-  user, shows loading/empty/error states.
+  Add TypingIndicator.tsx: animated 3-dot pulse, handles 0/1/2/3+ typers.
+  Add typingBounce @keyframes to globals.css.
 
-  Add ChatContext.openNewChat(): calls createOrGetDm(), upserts the
-  conversation into the sidebar (prepend if new), returns conv id.
+  Extend ChatContext: typingUsers state (Record<convId, Record<userId, name>>),
+  receiveTyping() action with 3s safety auto-remove timer (useRef, no leak).
 
-  Wire SidebarHeader PenSquare button → Sidebar.newChatOpen state →
-  NewChatPanel. Thread onNewChat through AppLayout → Sidebar → Header.
+  Extend WebSocketContext: sendTypingStart()/sendTypingStop() helpers.
 
-  ChatApp.handleNewChat(): openNewChat() then auto-select conversation.
+  MessageComposer: debounce 400ms (typing_start), 1s stop timer (typing_stop),
+  immediate stop on send; all timers cleared on unmount.
 
-  npm run build: ✓ Compiled successfully, zero TS/lint errors.
+  Thread props: MessageArea -> ChatWindow -> AppLayout -> page.tsx.
+  Wire onTyping callback: receiveTyping(). Guard: selectedId && isConnected.
+
+  npm run build: Compiled successfully, zero TS/lint errors.
   ```
 
 ## Current Blockers
-- None. Full real-time + new chat flow implemented end-to-end.
+- None. Full real-time + new chat flow + typing indicators implemented end-to-end.
 
 ## TODO Checklist
 - [x] Initialize Next.js project in `frontend/`.
@@ -135,8 +180,9 @@
 - [x] Fix empty conversation list for newly registered users (welcome DM on registration).
 - [x] Implement WebSocket client for real-time updates.
 - [x] Implement user search and new conversation flow.
+- [x] Implement real-time typing indicators.
 - [ ] Write `README.md`.
 - [ ] Deploy frontend & backend.
 
 ## Next Milestone
-**Milestone 11: Deployment** — Deploy backend to Render/Railway, frontend to Vercel/Netlify.
+**Milestone 12: Deployment** — Deploy backend to Render/Railway, frontend to Vercel/Netlify.

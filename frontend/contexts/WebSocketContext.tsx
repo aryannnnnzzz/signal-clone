@@ -84,6 +84,10 @@ interface WebSocketContextValue {
   sendFrame: (frame: object) => void;
   /** Send a new_message frame for a conversation. */
   sendWsMessage: (conversationId: string, content: string) => void;
+  /** Send a typing_start frame — called by MessageComposer debounce. */
+  sendTypingStart: (conversationId: string) => void;
+  /** Send a typing_stop frame — called after 1s inactivity or on message send. */
+  sendTypingStop: (conversationId: string) => void;
   /**
    * Register callbacks to receive inbound frames.
    * Called once by ChatContext on mount. Replaces any previously registered
@@ -292,6 +296,20 @@ export function WebSocketProvider({ token, children }: WebSocketProviderProps) {
     [sendFrame]
   );
 
+  const sendTypingStart = useCallback(
+    (conversationId: string) => {
+      sendFrame({ type: "typing_start", conversation_id: conversationId });
+    },
+    [sendFrame]
+  );
+
+  const sendTypingStop = useCallback(
+    (conversationId: string) => {
+      sendFrame({ type: "typing_stop", conversation_id: conversationId });
+    },
+    [sendFrame]
+  );
+
   const registerCallbacks = useCallback((callbacks: WebSocketCallbacks) => {
     callbacksRef.current = callbacks;
   }, []);
@@ -302,6 +320,8 @@ export function WebSocketProvider({ token, children }: WebSocketProviderProps) {
     isConnected,
     sendFrame,
     sendWsMessage,
+    sendTypingStart,
+    sendTypingStop,
     registerCallbacks,
   };
 

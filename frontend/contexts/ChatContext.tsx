@@ -34,6 +34,7 @@ import {
   useContext,
   useState,
   useCallback,
+  useRef,
   type ReactNode,
 } from "react";
 import {
@@ -44,7 +45,10 @@ import {
 import { createOrGetDm } from "@/lib/userService";
 import { useAuth } from "@/contexts/AuthContext";
 import type { Conversation, Message } from "@/types";
-import type { WsMessagePayload } from "@/contexts/WebSocketContext";
+import type { WsMessagePayload, WsTypingPayload } from "@/contexts/WebSocketContext";
+
+/** Per-conversation typing state — a map of userId → display name. */
+export type TypingUsersMap = Record<string, Record<string, string>>;
 
 // ─── Context shape ──────────────────────────────────────────────────────────
 
@@ -56,6 +60,11 @@ interface ChatContextValue {
   sendingMessage: boolean;
   conversationsError: string | null;
   messagesError: string | null;
+  /**
+   * Typing state: typingUsers[conversationId][userId] = displayName.
+   * Only contains entries for users currently typing.
+   */
+  typingUsers: TypingUsersMap;
 
   loadConversations: () => Promise<void>;
   selectConversation: (conversationId: string) => Promise<void>;
@@ -67,6 +76,8 @@ interface ChatContextValue {
   ) => Promise<void>;
   /** Called by WebSocketContext when a `message` frame arrives. */
   receiveMessage: (payload: WsMessagePayload, currentUserId: string) => void;
+  /** Called by WebSocketContext when a `typing` or `typing_stop` frame arrives. */
+  receiveTyping: (payload: WsTypingPayload, isStop: boolean) => void;
   /** Called by WebSocketContext when a `presence` frame arrives. */
   updatePresence: (userId: string, isOnline: boolean) => void;
   /**
@@ -117,6 +128,11 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const [sendingMessage, setSendingMessage] = useState(false);
   const [conversationsError, setConversationsError] = useState<string | null>(null);
   const [messagesError, setMessagesError] = useState<string | null>(null);
+  // typingUsers[conversationId][userId] = displayName
+  const [typingUsers, setTypingUsers] = useState<TypingUsersMap>({});
+  // Safety timers: auto-remove typers if typing_stop never arrives
+  // typingTimers[conversationId_userId] = setTimeout handle
+  const typingTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
   /* ── Load conversations ──────────────────────────────── */
 
@@ -218,6 +234,68 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           };
         })
       );
+    },
+    []
+  );
+
+  /* ── Receive a typing indicator from WebSocket ───────── */
+
+  /**
+   * Called by WebSocketContext whenever a `typing` or `typing_stop` frame arrives.
+   *
+   * - `typing`: add user to typingUsers[convId], reset their 3-second safety timer.
+   * - `typing_stop`: remove user from typingUsers[convId], cancel their timer.
+   *
+   * Safety timer: if `typing_stop` never arrives (tab crash, network drop),
+   * the typer is removed automatically after 3 seconds.
+   */
+  const receiveTyping = useCallback(
+    (payload: WsTypingPayload, isStop: boolean) => {
+      const { conversation_id: convId, user_id: userId, display_name: displayName } = payload;
+      const timerKey = `${convId}_${userId}`;
+
+      // Always clear any existing safety timer for this user
+      if (typingTimersRef.current[timerKey]) {
+        clearTimeout(typingTimersRef.current[timerKey]);
+        delete typingTimersRef.current[timerKey];
+      }
+
+      if (isStop) {
+        // Remove user from typing state
+        setTypingUsers((prev) => {
+          const convTypers = { ...(prev[convId] ?? {}) };
+          delete convTypers[userId];
+          if (Object.keys(convTypers).length === 0) {
+            const next = { ...prev };
+            delete next[convId];
+            return next;
+          }
+          return { ...prev, [convId]: convTypers };
+        });
+      } else {
+        // Add / refresh user in typing state
+        const name = displayName ?? "Someone";
+        console.log("[DEBUG] Updating typingUsers:", { convId, userId, name });
+        setTypingUsers((prev) => ({
+          ...prev,
+          [convId]: { ...(prev[convId] ?? {}), [userId]: name },
+        }));
+
+        // Schedule safety auto-remove after 3 seconds
+        typingTimersRef.current[timerKey] = setTimeout(() => {
+          delete typingTimersRef.current[timerKey];
+          setTypingUsers((prev) => {
+            const convTypers = { ...(prev[convId] ?? {}) };
+            delete convTypers[userId];
+            if (Object.keys(convTypers).length === 0) {
+              const next = { ...prev };
+              delete next[convId];
+              return next;
+            }
+            return { ...prev, [convId]: convTypers };
+          });
+        }, 3_000);
+      }
     },
     []
   );
@@ -389,10 +467,12 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     sendingMessage,
     conversationsError,
     messagesError,
+    typingUsers,
     loadConversations,
     selectConversation,
     sendMessage,
     receiveMessage,
+    receiveTyping,
     updatePresence,
     openNewChat,
   };

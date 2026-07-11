@@ -11,6 +11,12 @@ interface ChatWindowProps {
   onBack: () => void;
   onSendMessage: (conversationId: string, content: string) => Promise<void>;
   isLoadingMessages: boolean;
+  /** Users currently typing in the active conversation. */
+  typers: { userId: string; displayName: string }[];
+  /** Forwarded to MessageComposer — fires when user starts typing. */
+  onTypingStart: () => void;
+  /** Forwarded to MessageComposer — fires when user stops typing or sends. */
+  onTypingStop: () => void;
 }
 
 /**
@@ -29,6 +35,9 @@ export default function ChatWindow({
   onBack,
   onSendMessage,
   isLoadingMessages,
+  typers,
+  onTypingStart,
+  onTypingStop,
 }: ChatWindowProps) {
   if (!conversation) {
     return <EmptyState />;
@@ -54,10 +63,15 @@ export default function ChatWindow({
         <MessageArea
           messages={messages}
           conversationType={conversation.type}
+          typers={typers}
         />
       )}
 
-      <MessageComposer onSend={handleSend} />
+      <MessageComposer
+        onSend={handleSend}
+        onTypingStart={onTypingStart}
+        onTypingStop={onTypingStop}
+      />
     </main>
   );
 }

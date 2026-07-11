@@ -10,6 +10,10 @@ interface MessageComposerProps {
    * promise. Any error is handled by the caller (ChatContext).
    */
   onSend: (content: string) => Promise<void>;
+  /** Called after 400 ms of typing — send a typing_start WS frame. */
+  onTypingStart: () => void;
+  /** Called after 1 s of inactivity or immediately on send — send typing_stop. */
+  onTypingStop: () => void;
 }
 
 /**
@@ -24,10 +28,29 @@ interface MessageComposerProps {
  * Enter sends; Shift+Enter inserts a newline.
  * The send button is disabled while a message is being sent.
  */
-export default function MessageComposer({ onSend }: MessageComposerProps) {
+export default function MessageComposer({ onSend, onTypingStart, onTypingStop }: MessageComposerProps) {
   const [draft, setDraft] = useState("");
   const [isSending, setIsSending] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Refs for debounce timers — mutated without triggering re-renders
+  // debounceRef:  fires typing_start 400 ms after first keystroke in a burst
+  // stopRef:      fires typing_stop  1 s  after the last keystroke
+  // isTypingRef:  tracks whether we've already sent typing_start for this burst
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const stopRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isTypingRef = useRef(false);
+
+  // Cancel all pending timers on unmount to prevent memory leaks
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current) {
+        clearTimeout(debounceRef.current);
+        clearInterval(debounceRef.current);
+      }
+      if (stopRef.current) clearTimeout(stopRef.current);
+    };
+  }, []);
 
   // Auto-resize textarea height based on content
   useEffect(() => {
@@ -44,9 +67,72 @@ export default function MessageComposer({ onSend }: MessageComposerProps) {
     }
   };
 
+  /**
+   * Handle every draft change.
+   * - Debounce typing_start: fire once 400 ms after first keystroke.
+   * - Reset stop timer: fire typing_stop 1 s after the LAST keystroke.
+   */
+  const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setDraft(e.target.value);
+
+    // If draft just became empty, stop typing immediately
+    if (!e.target.value.trim()) {
+      if (debounceRef.current) {
+        clearTimeout(debounceRef.current);
+        clearInterval(debounceRef.current);
+        debounceRef.current = null;
+      }
+      if (stopRef.current) { clearTimeout(stopRef.current); stopRef.current = null; }
+      if (isTypingRef.current) {
+        isTypingRef.current = false;
+        onTypingStop();
+      }
+      return;
+    }
+
+    // Reset the 1 s stop timer on every keystroke
+    if (stopRef.current) clearTimeout(stopRef.current);
+    stopRef.current = setTimeout(() => {
+      stopRef.current = null;
+      if (isTypingRef.current) {
+        isTypingRef.current = false;
+        onTypingStop();
+      }
+    }, 1_000);
+
+    // Schedule typing_start if not already sent for this burst
+    if (!isTypingRef.current && !debounceRef.current) {
+      debounceRef.current = setTimeout(() => {
+        debounceRef.current = null;
+        isTypingRef.current = true;
+        console.log("[DEBUG] MessageComposer calling onTypingStart()");
+        onTypingStart();
+        
+        // Setup an interval to re-send typing_start every 2.5 seconds
+        // so the 3-second safety timer on the receiving end doesn't expire
+        // while the user is still typing a long message.
+        debounceRef.current = setInterval(() => {
+          onTypingStart();
+        }, 2500);
+      }, 400);
+    }
+  };
+
   const handleSend = async () => {
     const content = draft.trim();
     if (!content || isSending) return;
+
+    // Stop typing immediately — clear timers, notify server
+    if (debounceRef.current) {
+      clearTimeout(debounceRef.current);
+      clearInterval(debounceRef.current);
+      debounceRef.current = null;
+    }
+    if (stopRef.current) { clearTimeout(stopRef.current); stopRef.current = null; }
+    if (isTypingRef.current) {
+      isTypingRef.current = false;
+      onTypingStop();
+    }
 
     // Clear the draft optimistically before the await so the UI feels snappy
     setDraft("");
@@ -85,7 +171,7 @@ export default function MessageComposer({ onSend }: MessageComposerProps) {
         <textarea
           ref={textareaRef}
           value={draft}
-          onChange={(e) => setDraft(e.target.value)}
+          onChange={handleChange}
           onKeyDown={handleKeyDown}
           placeholder="Signal message"
           rows={1}

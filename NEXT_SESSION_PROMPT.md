@@ -98,6 +98,24 @@ Location: `frontend/lib/userService.ts`, `frontend/components/sidebar/NewChatPan
 - `Sidebar.tsx` now hosts the `NewChatPanel` as an overlay.
 - `AppLayout.tsx` and `page.tsx` threaded `onNewChat` down to the sidebar, and added `handleNewChat` in `page.tsx` to automatically select the created DM.
 
+### Frontend — Milestone 11: Real-time Typing Indicators (✅ Complete)
+Location: `frontend/components/chat/TypingIndicator.tsx`
+
+**New file:**
+- `frontend/components/chat/TypingIndicator.tsx`: Animated 3-dot pulse with contextual text. Returns null when no one is typing. Handles 0/1/2/3+ concurrent typers. Uses `typingBounce` CSS keyframe from `globals.css`.
+
+**Modified:**
+- `ChatContext.tsx`: added `typingUsers: TypingUsersMap` state and `receiveTyping(payload, isStop)` action. 3s safety auto-remove timer via `useRef` (no memory leaks).
+- `WebSocketContext.tsx`: added `sendTypingStart(convId)` and `sendTypingStop(convId)` helpers.
+- `MessageComposer.tsx`: added `onTypingStart`/`onTypingStop` props. `debounceRef` fires after 400ms; `stopRef` fires after 1s inactivity; `handleSend` fires stop immediately. All timers cleared on unmount.
+- `MessageArea.tsx`: accepts `typers` prop, renders `<TypingIndicator>`.
+- `ChatWindow.tsx`: threads `typers`, `onTypingStart`, `onTypingStop`.
+- `AppLayout.tsx`: threads same three props.
+- `page.tsx`: wires `onTyping` → `receiveTyping`; derives `currentTypers`; `handleTypingStart/Stop` guard on `selectedId && isConnected`.
+- `globals.css`: added `@keyframes typingBounce`.
+
+**Backend: no changes.** `typing_start`/`typing_stop` frames were already fully handled.
+
 ### Provider nesting (important for future changes):
 ```tsx
 <ChatProvider>           ← owns conversations/messages state
@@ -109,7 +127,7 @@ Location: `frontend/lib/userService.ts`, `frontend/components/sidebar/NewChatPan
 
 ## 3. What remains (your task)
 
-### Milestone 11: Deployment
+### Milestone 12: Deployment
 
 Options:
 - **Backend:** Render.com (free tier, Docker or Python runtime) or Railway.app
@@ -145,6 +163,8 @@ Write `README.md` covering:
 - `frontend/data/mockData.ts` — keep for reference; not used in the app.
 - `frontend/lib/utils.ts` — keep `"en-GB"` locale + UTC pinning.
 - `frontend/contexts/WebSocketContext.tsx` — complete; do not redesign.
+- `frontend/contexts/ChatContext.tsx` — complete; do not redesign.
+- `frontend/components/chat/TypingIndicator.tsx` — complete; do not redesign.
 
 ---
 
@@ -190,25 +210,17 @@ ws://localhost:8000/ws?token=<jwt>
 
 ---
 
-## 6. Testing checklist for Milestone 10.5
+## 6. Testing checklist for Milestone 11 (Typing Indicators)
 
-To verify the New Chat Flow is working:
+To verify typing indicators are working:
 1. Start backend: `cd backend && uvicorn app.main:app --reload`
 2. Start frontend: `cd frontend && npm run dev`
-3. Open `http://localhost:3000` → login as `alice` (password: `password123`)
-4. Click the Pen (New Chat) icon in the top left of the sidebar.
-5. The `NewChatPanel` overlay should open and auto-focus the input.
-6. Type a query (e.g., "b") — results should appear after 300ms.
-7. `alice` should not see herself in the search results.
-8. Click on a result (e.g., `bob`).
-9. The overlay should close, the conversation with `bob` should appear in the sidebar (if new, at the top), and the chat window should open that conversation automatically.
-10. Send a message to confirm the newly created/opened DM is functional.
-1. Start backend: `cd backend && uvicorn app.main:app --reload`
-2. Start frontend: `cd frontend && npm run dev`
-3. Open `http://localhost:3000` in Tab A → login as `alice` (password: `password123`)
-4. Open `http://localhost:3000` in Tab B → login as `bob` (password: `password123`)
-5. Open the alice↔bob DM in both tabs
-6. Send a message from Tab A → should appear in Tab B instantly (no refresh)
-7. Send a message from Tab B → should appear in Tab A instantly
-8. Kill backend → both tabs should log reconnect attempts in browser console
-9. Restart backend → both tabs should reconnect and resume messaging
+3. Open Tab A: `http://localhost:3000` → login as `alice` (password: `password123`)
+4. Open Tab B: `http://localhost:3000` → login as `bob` (password: `password123`)
+5. In both tabs, open the alice↔bob DM.
+6. In Tab A, start typing → Tab B should show **"Alice is typing..."** within ~400ms.
+7. Stop typing in Tab A for 1 second → indicator should disappear in Tab B.
+8. Type again in Tab A, then press Enter (send) → indicator disappears immediately in Tab B.
+9. Switch conversation in Tab B → typing indicator from Tab A no longer shows.
+10. Kill Tab A mid-type → indicator should auto-disappear in Tab B within 3 seconds (safety timer).
+11. In a group chat, have alice and bob both type → the third member should see **"Alice and Bob are typing..."**.
