@@ -1,5 +1,11 @@
 # Signal Clone | Full Stack Real Time Messaging Application
 
+![Next.js](https://img.shields.io/badge/Next.js-15-black?logo=next.js)
+![FastAPI](https://img.shields.io/badge/FastAPI-009688?logo=fastapi)
+![TypeScript](https://img.shields.io/badge/TypeScript-blue?logo=typescript)
+![Python](https://img.shields.io/badge/Python-yellow?logo=python)
+![WebSockets](https://img.shields.io/badge/WebSockets-Real--Time-success)
+
 A full stack, Signal-inspired messaging platform built with Next.js, FastAPI, WebSockets, and JWT authentication. It delivers a modern real time chat experience with secure authentication, group conversations, voice messages, file sharing, emoji reactions, and a responsive interface, while showcasing production-style architecture and deployment on Vercel and Railway.
 
 ---
