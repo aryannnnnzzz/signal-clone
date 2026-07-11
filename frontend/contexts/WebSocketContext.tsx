@@ -98,7 +98,7 @@ interface WebSocketContextValue {
   /** Send an arbitrary JSON frame. No-op if not connected. */
   sendFrame: (frame: object) => void;
   /** Send a new_message frame for a conversation. */
-  sendWsMessage: (conversationId: string, content: string) => void;
+  sendWsMessage: (conversationId: string, content: string, contentType?: "text" | "image" | "file") => void;
   /** Send a typing_start frame — called by MessageComposer debounce. */
   sendTypingStart: (conversationId: string) => void;
   /** Send a typing_stop frame — called after 1s inactivity or on message send. */
@@ -316,12 +316,12 @@ export function WebSocketProvider({ token, children }: WebSocketProviderProps) {
   }, []);
 
   const sendWsMessage = useCallback(
-    (conversationId: string, content: string) => {
+    (conversationId: string, content: string, contentType: "text" | "image" | "file" = "text") => {
       sendFrame({
         type: "new_message",
         conversation_id: conversationId,
         content,
-        content_type: "text",
+        content_type: contentType,
       });
     },
     [sendFrame]

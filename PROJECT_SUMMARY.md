@@ -100,13 +100,26 @@ The application utilises a layered, client-server architecture:
   - WS `read_receipt` and `delivery_receipt` frames correctly update specific messages in `ChatContext` state.
   - Status updates are reflected immediately in UI without page refreshes (`MessageBubble` checkmarks update).
 
+✅ **Settings UI & Preferences (Milestone 13):**
+  - `SettingsContext.tsx` syncing user preferences (theme, privacy toggles) to `localStorage`.
+  - Multi-tab `SettingsModal` overlay with Account, Appearance, Privacy, Notifications, and About tabs.
+  - Tailwind v4 theme refactored to use CSS variables with `.light` class support.
+  - Privacy toggles securely suppress WebSocket events (`mark_read`, `mark_delivered`, `typing_start`, `typing_stop`) when disabled.
+  - Account tab hooked into `updateProfile` for display name and avatar changes.
+
+✅ **Settings Polish (Milestone 13.5):**
+  - Entry and exit animations, backdrop blur, focus trap, and Escape key listeners implemented for accessibility.
+  - Avatar improvements: drag-and-drop file support, remove photo button.
+  - Save UX improvements: disabling save unless changes detected, success toasts, error toasts, and loading spinners.
+  - Smooth Light/Dark mode transitions across all major layout backgrounds and borders.
+
 ## Pending Features
 ❌ **Deployment:** Host frontend on Vercel, backend on Render/Railway.
 ❌ **README:** Comprehensive documentation.
 
 ## Current Progress
-**~99.5% Complete.**
-The entire backend and full frontend (auth + chat REST API + real-time WebSocket + new chat flow + typing indicators + read receipts) are built and connected. Two browser windows can exchange messages in real time, see each other's typing indicators, and receive live delivery/read ticks. The next phase is deployment and documentation.
+**~99.9% Complete.**
+The entire backend and full frontend (auth + chat REST API + real-time WebSocket + new chat flow + typing indicators + read receipts + settings/preferences) are built and connected. Two browser windows can exchange messages in real time, see each other's typing indicators, and receive live delivery/read ticks. The next phase is deployment and documentation.
 
 ## Next Milestone
 **Milestone 12: Deployment** — Deploy backend to Render/Railway, frontend to Vercel/Netlify.

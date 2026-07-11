@@ -79,8 +79,9 @@ interface ChatContextValue {
   sendMessage: (
     conversationId: string,
     content: string,
-    wsSend?: (convId: string, content: string) => void,
-    wsConnected?: boolean
+    wsSend?: (convId: string, content: string, contentType?: "text" | "image" | "file") => void,
+    wsConnected?: boolean,
+    contentType?: "text" | "image" | "file"
   ) => Promise<void>;
   /** Called by WebSocketContext when a `message` frame arrives. */
   receiveMessage: (payload: WsMessagePayload, currentUserId: string) => void;
@@ -404,8 +405,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     async (
       conversationId: string,
       content: string,
-      wsSend?: (convId: string, content: string) => void,
-      wsConnected?: boolean
+      wsSend?: (convId: string, content: string, contentType?: "text" | "image" | "file") => void,
+      wsConnected?: boolean,
+      contentType: "text" | "image" | "file" = "text"
     ) => {
       if (!user || !content.trim()) return;
 
@@ -417,7 +419,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         senderId: user.id,
         senderName: user.display_name,
         content: content.trim(),
-        contentType: "text",
+        contentType: contentType,
         status: "sending",
         createdAt: new Date().toISOString(),
         isOwn: true,
@@ -437,20 +439,32 @@ export function ChatProvider({ children }: { children: ReactNode }) {
        * via the WS `message` frame — no spinner needed.
        */
       if (wsConnected && wsSend) {
-        wsSend(conversationId, content.trim());
+        wsSend(conversationId, content.trim(), contentType);
         // Update sidebar preview optimistically
         setConversations((prev) =>
-          prev.map((c) =>
-            c.id === conversationId
+          prev.map((c) => {
+            let lastMessage = content.trim();
+            if (contentType === "image" || contentType === "file") {
+              try {
+                const parsed = JSON.parse(content.trim());
+                lastMessage = parsed.text 
+                  ? (contentType === "image" ? `📷 ${parsed.text}` : `📎 ${parsed.text}`)
+                  : (contentType === "image" ? "📷 Image" : "📎 Attachment");
+              } catch {
+                lastMessage = contentType === "image" ? "📷 Image" : "📎 Attachment";
+              }
+            }
+
+            return c.id === conversationId
               ? {
                   ...c,
-                  lastMessage: content.trim(),
+                  lastMessage,
                   lastMessageAt: new Date().toISOString(),
                   lastMessageIsOwn: true,
                   unreadCount: 0,
                 }
-              : c
-          )
+              : c;
+          })
         );
         return;
       }
@@ -461,7 +475,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
        */
       setSendingMessage(true);
       try {
-        const persisted = await postMessage(conversationId, content.trim(), user.id);
+        const persisted = await postMessage(conversationId, content.trim(), user.id, contentType);
 
         // Replace the optimistic message with the real one from the server
         setMessages((prev) => ({
@@ -473,17 +487,28 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
         // Update the conversation preview in the sidebar
         setConversations((prev) =>
-          prev.map((c) =>
-            c.id === conversationId
+          prev.map((c) => {
+            let lastMessage = persisted.content;
+            if (persisted.contentType === "image" || persisted.contentType === "file") {
+              try {
+                const parsed = JSON.parse(persisted.content);
+                lastMessage = parsed.text 
+                  ? (persisted.contentType === "image" ? `📷 ${parsed.text}` : `📎 ${parsed.text}`)
+                  : (persisted.contentType === "image" ? "📷 Image" : "📎 Attachment");
+              } catch {
+                lastMessage = persisted.contentType === "image" ? "📷 Image" : "📎 Attachment";
+              }
+            }
+            return c.id === conversationId
               ? {
                   ...c,
-                  lastMessage: persisted.content,
+                  lastMessage,
                   lastMessageAt: persisted.createdAt,
                   lastMessageIsOwn: true,
                   unreadCount: 0,
                 }
-              : c
-          )
+              : c;
+          })
         );
       } catch (err) {
         // Degrade the optimistic message to "sent" so user can see it failed.

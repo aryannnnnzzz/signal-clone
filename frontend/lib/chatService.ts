@@ -149,7 +149,19 @@ function mapConversation(
   const memberCount = !isDm ? raw.members.length : undefined;
 
   const lastMsg = raw.last_message;
-  const lastMessage = lastMsg?.content ?? undefined;
+  let lastMessage = lastMsg?.content ?? undefined;
+  
+  if (lastMsg?.content_type === "image" || lastMsg?.content_type === "file") {
+    try {
+      const parsed = JSON.parse(lastMsg.content);
+      lastMessage = parsed.text 
+        ? (lastMsg.content_type === "image" ? `📷 ${parsed.text}` : `📎 ${parsed.text}`)
+        : (lastMsg.content_type === "image" ? "📷 Image" : "📎 Attachment");
+    } catch {
+      lastMessage = lastMsg.content_type === "image" ? "📷 Image" : "📎 Attachment";
+    }
+  }
+
   const lastMessageAt = lastMsg?.created_at ?? raw.updated_at;
   const lastMessageIsOwn = lastMsg
     ? lastMsg.sender_id === currentUserId
@@ -210,13 +222,14 @@ export async function fetchMessages(
 export async function postMessage(
   conversationId: string,
   content: string,
-  currentUserId: string
+  currentUserId: string,
+  contentType: "text" | "image" | "file" = "text"
 ): Promise<Message> {
   const raw = await apiRequest<BackendMessageOut>(
     `/api/conversations/${conversationId}/messages`,
     {
       method: "POST",
-      body: { content, content_type: "text" },
+      body: { content, content_type: contentType },
     }
   );
   return mapMessage(raw, currentUserId);

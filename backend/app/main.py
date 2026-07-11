@@ -8,9 +8,11 @@ from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI, WebSocket, WebSocketDisconnect, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from jose import JWTError, jwt
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+import os
 
 from app.config import settings
 from app.database import Base, engine, get_async_session
@@ -51,12 +53,17 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Mount uploads directory
+os.makedirs("uploads", exist_ok=True)
+app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
+
 # Mount REST routers
 from app.api.auth import router as auth_router  # noqa: E402
 from app.api.users import router as users_router  # noqa: E402
 from app.api.contacts import router as contacts_router  # noqa: E402
 from app.api.conversations import router as conversations_router  # noqa: E402
 from app.api.messages import router as messages_router  # noqa: E402
+from app.api.upload import router as upload_router  # noqa: E402
 from app.api.dev import router as dev_router  # noqa: E402  — dev-only helpers
 
 app.include_router(auth_router)
@@ -64,6 +71,7 @@ app.include_router(users_router)
 app.include_router(contacts_router)
 app.include_router(conversations_router)
 app.include_router(messages_router)
+app.include_router(upload_router)
 app.include_router(dev_router)  # dev-only: seed helpers for local development
 
 

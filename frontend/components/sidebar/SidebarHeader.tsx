@@ -7,6 +7,8 @@ import { useAuth } from "@/contexts/AuthContext";
 interface SidebarHeaderProps {
   /** Called when the user clicks the "New conversation" (pen) button. */
   onNewChat: () => void;
+  /** Called when the user clicks the Settings button. */
+  onSettings: () => void;
 }
 
 /**
@@ -17,7 +19,7 @@ interface SidebarHeaderProps {
  * Now uses the real authenticated user and provides a logout button.
  * The PenSquare button is now wired to open the NewChatPanel.
  */
-export default function SidebarHeader({ onNewChat }: SidebarHeaderProps) {
+export default function SidebarHeader({ onNewChat, onSettings }: SidebarHeaderProps) {
   const { user, logout } = useAuth();
 
   return (
@@ -63,6 +65,7 @@ export default function SidebarHeader({ onNewChat }: SidebarHeaderProps) {
           <PenSquare size={17} />
         </button>
         <button
+          onClick={onSettings}
           className="p-1.5 rounded-full text-signal-secondary hover:text-signal-primary hover:bg-signal-hover transition-colors"
           aria-label="Settings"
           title="Settings"

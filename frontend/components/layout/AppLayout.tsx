@@ -9,7 +9,7 @@ interface AppLayoutProps {
   messages: Message[];
   onSelectConversation: (id: string) => void;
   onBack: () => void;
-  onSendMessage: (conversationId: string, content: string) => Promise<void>;
+  onSendMessage: (conversationId: string, content: string, contentType?: "text" | "image" | "file") => Promise<void>;
   loadingConversations: boolean;
   loadingMessages: boolean;
   conversationsError: string | null;

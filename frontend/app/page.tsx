@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import AppLayout from "@/components/layout/AppLayout";
 import AuthFlow from "@/components/auth/AuthFlow";
 import { useAuth } from "@/contexts/AuthContext";
@@ -14,6 +14,7 @@ import {
   type WsReadReceiptPayload,
   type WsDeliveryReceiptPayload,
 } from "@/contexts/WebSocketContext";
+import { useSettings } from "@/contexts/SettingsContext";
 
 /**
  * Application entry point.
@@ -106,6 +107,12 @@ function ChatApp() {
     registerCallbacks 
   } = useWebSocket();
   const { user } = useAuth();
+  const { settings } = useSettings();
+
+  const settingsRef = useRef(settings);
+  useEffect(() => {
+    settingsRef.current = settings;
+  }, [settings]);
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
@@ -116,7 +123,7 @@ function ChatApp() {
     registerCallbacks({
       onMessage: (payload: WsMessagePayload) => {
         receiveMessage(payload, user.id);
-        if (payload.sender_id !== user.id) {
+        if (payload.sender_id !== user.id && settingsRef.current.readReceipts) {
           sendMarkDelivered([payload.id]);
         }
       },
@@ -151,7 +158,9 @@ function ChatApp() {
     const conv = conversations.find((c) => c.id === selectedId);
     if (conv && conv.unreadCount > 0) {
       markConversationAsRead(selectedId);
-      sendMarkRead(selectedId);
+      if (settingsRef.current.readReceipts) {
+        sendMarkRead(selectedId);
+      }
     }
   }, [selectedId, conversations, isConnected, markConversationAsRead, sendMarkRead]);
 
@@ -170,8 +179,8 @@ function ChatApp() {
    * Wraps ChatContext.sendMessage with the WS send function and connected state.
    * ChatContext will use WS if connected, REST POST if not.
    */
-  const handleSendMessage = async (conversationId: string, content: string) => {
-    await sendMessage(conversationId, content, sendWsMessage, isConnected);
+  const handleSendMessage = async (conversationId: string, content: string, contentType?: "text" | "image" | "file") => {
+    await sendMessage(conversationId, content, sendWsMessage, isConnected, contentType);
   };
 
   /**
@@ -196,12 +205,14 @@ function ChatApp() {
 
   /** Send typing_start for the active conversation (no-op if none selected). */
   const handleTypingStart = () => {
+    if (!settings.typingIndicators) return;
     console.log("[DEBUG] handleTypingStart called. selectedId:", selectedId, "isConnected:", isConnected);
     if (selectedId && isConnected) sendTypingStart(selectedId);
   };
 
   /** Send typing_stop for the active conversation (no-op if none selected). */
   const handleTypingStop = () => {
+    if (!settings.typingIndicators) return;
     console.log("[DEBUG] handleTypingStop called. selectedId:", selectedId, "isConnected:", isConnected);
     if (selectedId && isConnected) sendTypingStop(selectedId);
   };

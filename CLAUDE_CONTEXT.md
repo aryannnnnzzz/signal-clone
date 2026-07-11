@@ -12,15 +12,68 @@
 # Current Project Status
 - **Overall completion:** ~99%
 - **Backend completion:** 100% (Fully tested and verified)
-- **Frontend completion:** ~99.5% (Auth, Chat REST, WebSocket, User Search, New Chat, Typing Indicators, Read Receipts all complete)
+- **Frontend completion:** 100% (Auth, Chat REST, WebSocket, User Search, New Chat, Typing Indicators, Read Receipts, Settings Polish all complete)
 - **Deployment completion:** 0%
 - **README completion:** 0%
 
 ---
 
-# What Was Built (Read Receipts — Milestone 11.5)
+# What Was Built (Settings Polish — Milestone 13.5)
 
-## Milestone 11.5 — Modified Files
+## Milestone 13.5 — Modified Files
+```
+frontend/components/settings/SettingsModal.tsx 
+                                      ← Added exit animations (`isClosing`), focus trap (`modalRef`), 
+                                        escape key to close, drag-and-drop avatar upload (`onDrop`),
+                                        remove photo button, disabled save logic, loading spinners,
+                                        error toasts, and a fully flushed out About tab.
+frontend/app/globals.css              ← Added `.light` color refinements and global `transition-colors` 
+                                        for smooth Dark/Light mode switching.
+```
+
+## Settings Polish UX
+- **Modal Entry/Exit:** Seamless scale/fade in and out with backdrop blur.
+- **Save UX:** Disable button until changes detected, success/error toasts, and spin states.
+- **Accessibility:** Tab navigation trapped inside modal, restores focus to previous element upon close.
+- **Appearance:** 200ms smooth transition applied across major layout backgrounds and borders.
+
+# Previous Milestone: Settings (Milestone 13)
+```
+frontend/contexts/SettingsContext.tsx ← Manages & persists preferences in localStorage; 
+                                        Handles document.documentElement.classList for Light/Dark mode.
+frontend/components/settings/SettingsModal.tsx 
+                                      ← Multi-tab modal overlay for Account, Appearance, 
+                                        Privacy, Notifications, and About settings.
+```
+
+## Milestone 13 — Modified Files
+```
+frontend/app/globals.css              ← Moved colors to CSS variables, added .light override class.
+frontend/app/layout.tsx               ← Wrapped AuthProvider with SettingsProvider.
+frontend/components/sidebar/SidebarHeader.tsx
+                                      ← Wired the gear icon to an onSettings prop.
+frontend/components/sidebar/Sidebar.tsx
+                                      ← Hosts the SettingsModal overlay.
+frontend/app/page.tsx                 ← Consumes useSettings(); guards sendMarkRead, sendMarkDelivered, 
+                                        sendTypingStart, and sendTypingStop via user preferences.
+```
+
+## Settings Data Flow
+```
+User clicks gear icon
+  → SidebarHeader.onSettings() sets settingsOpen=true in Sidebar
+    → SettingsModal mounts (fixed overlay)
+      → User toggles "Read Receipts" in Privacy tab
+        → SettingsContext.updateSetting() updates state and saves to localStorage
+          → page.tsx receives updated settings via useSettings()
+            → page.tsx stops sending `mark_read` when opening chats
+      → User selects "Light" theme in Appearance tab
+        → SettingsContext updates state + localStorage
+          → SettingsContext effect applies `.light` class to document root
+            → globals.css CSS variables flip to light mode values
+```
+
+# Previous Milestone: Read Receipts (Milestone 11.5)
 ```
 frontend/contexts/WebSocketContext.tsx← Added WsReadReceiptPayload, WsDeliveryReceiptPayload;
                                         Added sendMarkRead(), sendMarkDelivered();
@@ -288,8 +341,8 @@ only creates conversations *between the 5 seed users*.
 ## Frontend Architecture
 - **Framework:** Next.js 15 App Router
 - **Language:** TypeScript
-- **Styling:** TailwindCSS v4 (`@import "tailwindcss"` / `@theme inline`)
-- **State:** AuthContext (auth), ChatContext (conversations/messages/typingUsers), WebSocketContext (WS lifecycle)
+- **Styling:** TailwindCSS v4 (`@import "tailwindcss"` / `@theme inline`) with CSS variable Light/Dark mode
+- **State:** AuthContext (auth), ChatContext (conversations/messages/typingUsers), WebSocketContext (WS lifecycle), SettingsContext (user preferences)
 
 ## Layered Architecture
 1. **API/Routers (`app/api/`)**: Handle HTTP requests/responses, authorization, and route to services.
@@ -333,7 +386,8 @@ frontend/
 ├── contexts/
 │   ├── AuthContext.tsx     # JWT auth state & session restore
 │   ├── ChatContext.tsx     # Conversations, messages, typingUsers, WS-aware sendMessage
-│   └── WebSocketContext.tsx← NEW: persistent WS lifecycle, reconnect, frame dispatch
+│   ├── SettingsContext.tsx # User preferences & local storage sync (theme, privacy)
+│   └── WebSocketContext.tsx# persistent WS lifecycle, reconnect, frame dispatch
 ├── data/
 │   └── mockData.ts         # Kept for reference; not used in production app
 ├── lib/
@@ -446,7 +500,9 @@ frontend/
 - Cursor-based message pagination.
 - Per-recipient delivery and read receipt tracking.
 - **Ephemeral typing indicators:** ✅ Frontend now fully implemented
-- **Read & Delivery receipts:** ✅ Frontend WS dispatch and automation fully implemented
+- **Real-time Read & Delivery receipts:** ✅ Frontend WS dispatch and automation fully implemented
+- **Settings UI & Preferences:** ✅ Frontend fully implemented with theme, privacy toggles, and persistence.
+- **Settings Polish:** ✅ Fully implemented (animations, focus trap, drag-and-drop, smooth transitions).
 - **Online/offline presence broadcasting.**
 - Database seeding with mock data.
 - Complete multi-step authentication UI flow (6 screens).
@@ -515,25 +571,19 @@ All the following features have been manually tested against the running server 
 ---
 
 # Git Status
-- **Latest branch:** `main`
-- **Latest commit message:** `feat(frontend): implement Milestone 11 — typing indicators`
+- **Latest commit message:** `feat(frontend): implement Milestone 13.5 — settings polish`
 - **GitHub repository status:** Behind
 - **Suggested commit for this session:**
   ```
-  feat(frontend): implement Milestone 11.5 — read receipts
+  feat(frontend): implement Milestone 13.5 — settings polish
 
-  Automate real-time delivery and read receipts using existing WebSocket architecture.
-
-  Extend WebSocketContext: add payload types, sendMarkRead, sendMarkDelivered,
-  and dispatch read_receipt/delivery_receipt frames.
-
-  Extend ChatContext: receiveReadReceipt updates own messages <= timestamp to 'read';
-  receiveDeliveryReceipt updates sent messages to 'delivered';
-  markConversationAsRead clears sidebar unreadCount.
-
-  page.tsx automation:
-  - onMessage: auto-send mark_delivered for incoming messages.
-  - useEffect: auto-send mark_read when selecting a conversation with unreads.
+  Add extensive UX, UI, and accessibility polish to the Settings Modal.
+  - Implement exit animations (fade + scale) and backdrop blur.
+  - Add lightweight focus trap, Escape key listener, and focus restoration.
+  - Implement drag-and-drop and remove photo logic for Avatars.
+  - Disable Save button if no changes exist; add loading spinners and error toasts.
+  - Add smooth transition colors in globals.css for Light/Dark mode flipping.
+  - Flesh out the About tab with Tech Stack and GitHub links.
 
   Compiled successfully, zero TS/lint errors.
   ```

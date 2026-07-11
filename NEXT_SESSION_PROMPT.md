@@ -126,6 +126,22 @@ Location: `frontend/contexts/WebSocketContext.tsx`, `frontend/contexts/ChatConte
   - Automated `sendMarkDelivered`: when `onMessage` receives a message from someone else, automatically emits `sendMarkDelivered`.
   - Automated `sendMarkRead`: `useEffect` monitors `selectedId` and `conversations`. If the selected conversation has unread messages, it automatically emits `sendMarkRead` and clears the local UI badge.
 
+### Frontend — Milestone 13: Settings & Preferences (✅ Complete)
+Location: `frontend/contexts/SettingsContext.tsx`, `frontend/components/settings/SettingsModal.tsx`
+
+**New files:**
+- `SettingsContext.tsx`: Manages user preferences (theme, privacy toggles) and persists them in `localStorage` under `signal_preferences`. Updates the document `classList` for Light/Dark mode.
+- `SettingsModal.tsx`: A multi-tab overlay opened from the SidebarHeader gear icon. Contains Account, Appearance, Privacy, Notifications, and About sections. (Polished in Milestone 13.5 with animations, focus trap, and drag-and-drop avatars).
+
+**Modified:**
+- `globals.css`: Replaced hardcoded inline theme with CSS variables and added `.light` class support, including a 200ms `transition-colors` rule for smooth theme swapping.
+- `layout.tsx`: Wrapped `AuthProvider` inside `SettingsProvider`.
+- `SidebarHeader.tsx`: Wired the gear icon `onClick` to an `onSettings` callback.
+- `Sidebar.tsx`: Added `settingsOpen` local state and embedded `<SettingsModal>`.
+- `page.tsx`: 
+  - Uses `useSettings()` to read privacy preferences.
+  - Guards WS events: `sendMarkRead`, `sendMarkDelivered`, `sendTypingStart`, `sendTypingStop` are suppressed if disabled in the Settings UI.
+
 ### Provider nesting (important for future changes):
 ```tsx
 <ChatProvider>           ← owns conversations/messages state
@@ -170,10 +186,12 @@ Write `README.md` covering:
 - `frontend/components/sidebar/*` — do not redesign.
 - `frontend/components/chat/*` — do not redesign.
 - `frontend/components/ui/*` — do not redesign.
+- `frontend/components/settings/SettingsModal.tsx` — complete; do not redesign.
 - `frontend/data/mockData.ts` — keep for reference; not used in the app.
 - `frontend/lib/utils.ts` — keep `"en-GB"` locale + UTC pinning.
 - `frontend/contexts/WebSocketContext.tsx` — complete; do not redesign.
 - `frontend/contexts/ChatContext.tsx` — complete; do not redesign.
+- `frontend/contexts/SettingsContext.tsx` — complete; do not redesign.
 - `frontend/components/chat/TypingIndicator.tsx` — complete; do not redesign.
 
 ---

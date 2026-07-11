@@ -3,12 +3,12 @@
 /* ─── Signal Color System ─────────────────────────────────── */
 @theme inline {
   /* Backgrounds */
-  --color-signal-sidebar:        #1b1c1f;
-  --color-signal-sidebar-header: #212227;
-  --color-signal-chat:           #141416;
-  --color-signal-hover:          #252628;
-  --color-signal-active:         #2e3035;
-  --color-signal-border:         #2d2e33;
+  --color-signal-sidebar:        var(--signal-sidebar);
+  --color-signal-sidebar-header: var(--signal-sidebar-header);
+  --color-signal-chat:           var(--signal-chat);
+  --color-signal-hover:          var(--signal-hover);
+  --color-signal-active:         var(--signal-active);
+  --color-signal-border:         var(--signal-border);
 
   /* Accent */
   --color-signal-blue:           #2c6bed;
@@ -16,18 +16,59 @@
 
   /* Bubbles */
   --color-signal-sent:           #2c6bed;
-  --color-signal-received:       #252527;
+  --color-signal-received:       var(--signal-received);
 
   /* Text */
-  --color-signal-primary:        #e9e9ea;
-  --color-signal-secondary:      #8e8e93;
-  --color-signal-muted:          #636366;
+  --color-signal-primary:        var(--signal-primary);
+  --color-signal-secondary:      var(--signal-secondary);
+  --color-signal-muted:          var(--signal-muted);
 
   /* Status */
   --color-signal-online:         #4caf50;
 
   /* Font */
   --font-sans: "Inter", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+:root, .dark {
+  --signal-sidebar:        #1b1c1f;
+  --signal-sidebar-header: #212227;
+  --signal-chat:           #141416;
+  --signal-hover:          #252628;
+  --signal-active:         #2e3035;
+  --signal-border:         #2d2e33;
+  --signal-received:       #252527;
+  --signal-primary:        #e9e9ea;
+  --signal-secondary:      #8e8e93;
+  --signal-muted:          #636366;
+}
+
+.light {
+  --signal-sidebar:        #ffffff;
+  --signal-sidebar-header: #f7f7f8;
+  --signal-chat:           #f2f2f2;
+  --signal-hover:          #f0f0f0;
+  --signal-active:         #e5e5e5;
+  --signal-border:         #e6e6e6;
+  --signal-received:       #ffffff;
+  --signal-primary:        #1b1b1b;
+  --signal-secondary:      #5e5e5e;
+  --signal-muted:          #8f8f8f;
+}
+
+/* Smooth Theme Transitions */
+body, 
+.bg-signal-sidebar, 
+.bg-signal-sidebar-header, 
+.bg-signal-chat, 
+.bg-signal-hover, 
+.border-signal-border,
+.text-signal-primary,
+.text-signal-secondary,
+.text-signal-muted {
+  transition-property: background-color, border-color, color;
+  transition-duration: 200ms;
+  transition-timing-function: ease-in-out;
 }
 
 /* ─── Base Reset ──────────────────────────────────────────── */

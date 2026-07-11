@@ -9,7 +9,7 @@ interface ChatWindowProps {
   conversation: Conversation | null;
   messages: Message[];
   onBack: () => void;
-  onSendMessage: (conversationId: string, content: string) => Promise<void>;
+  onSendMessage: (conversationId: string, content: string, contentType?: "text" | "image" | "file") => Promise<void>;
   isLoadingMessages: boolean;
   /** Users currently typing in the active conversation. */
   typers: { userId: string; displayName: string }[];
@@ -43,8 +43,8 @@ export default function ChatWindow({
     return <EmptyState />;
   }
 
-  const handleSend = async (content: string) => {
-    await onSendMessage(conversation.id, content);
+  const handleSend = async (content: string, contentType?: "text" | "image" | "file") => {
+    await onSendMessage(conversation.id, content, contentType);
   };
 
   return (

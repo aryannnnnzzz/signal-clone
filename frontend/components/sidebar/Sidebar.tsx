@@ -6,6 +6,7 @@ import SidebarHeader from "./SidebarHeader";
 import SearchBar from "./SearchBar";
 import ConversationList from "./ConversationList";
 import NewChatPanel from "./NewChatPanel";
+import SettingsModal from "../settings/SettingsModal";
 
 interface SidebarProps {
   conversations: Conversation[];
@@ -37,6 +38,7 @@ export default function Sidebar({
 }: SidebarProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [newChatOpen, setNewChatOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   const filtered =
     searchQuery.trim() === ""
@@ -53,7 +55,10 @@ export default function Sidebar({
       className="relative flex flex-col w-80 min-w-[280px] h-full bg-signal-sidebar border-r border-signal-border flex-shrink-0"
       aria-label="Conversations sidebar"
     >
-      <SidebarHeader onNewChat={() => setNewChatOpen(true)} />
+      <SidebarHeader 
+        onNewChat={() => setNewChatOpen(true)} 
+        onSettings={() => setSettingsOpen(true)}
+      />
       <SearchBar value={searchQuery} onChange={setSearchQuery} />
 
       {/* ── Loading state ─────────────────────────────── */}
@@ -107,6 +112,11 @@ export default function Sidebar({
         onSelectUser={(userId, displayName) => {
           onNewChat(userId, displayName);
         }}
+      />
+
+      <SettingsModal 
+        isOpen={settingsOpen} 
+        onClose={() => setSettingsOpen(false)} 
       />
     </aside>
   );

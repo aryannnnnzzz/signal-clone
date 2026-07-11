@@ -16,10 +16,37 @@
 - [x] **Milestone 10:** Real-time chat integration (WebSocket client)
 - [x] **Milestone 10.5:** User Search & New Conversation Flow
 - [x] **Milestone 11:** Typing Indicators
-- [x] **Milestone 11.5:** Read Receipts ← **JUST COMPLETED**
+- [x] **Milestone 11.5:** Read Receipts
+- [x] **Milestone 13:** Settings
+- [x] **Milestone 13.5:** Settings Polish ← **JUST COMPLETED**
+- [x] **Milestone 14:** Attachments (Images, Documents, Drag & Drop)
 - [ ] **Milestone 12:** Deployment
 
 ## Recently Completed Work
+
+### **[Milestone 14]** Attachments (Images, Documents, Drag & Drop)
+- Implemented file upload input and drag-and-drop zone in `MessageComposer.tsx`.
+- Added client-side image preview and document file validation.
+- Wired progress bar for uploads using `axios` config `onUploadProgress`.
+- Integrated `multer` on backend to handle multi-part file uploads and file storage.
+- Added message bubble rendering for attachments, including image resizing and file icons.
+
+### **[Milestone 13.5]** Settings Polish
+- Implemented scale and fade animations with `isClosing` state in `SettingsModal.tsx`.
+- Added a lightweight focus trap for accessibility and an Escape key listener.
+- Improved the Avatar section with drag-and-drop file support and a "Remove Photo" option.
+- Added loading spinners and disabled states to the "Save Profile" button.
+- Refined Light Mode variables and added global `transition-colors` in `globals.css` for smooth theme switching.
+- Fleshed out the About tab with the app logo, tech stack, and GitHub repository link.
+
+### **[Milestone 13]** Settings
+- Created `frontend/contexts/SettingsContext.tsx` to manage and persist user preferences in `localStorage` (`signal_preferences`).
+- Created `frontend/components/settings/SettingsModal.tsx` as a multi-tab overlay with Account, Appearance, Privacy, Notifications, and About sections.
+- Refactored `frontend/app/globals.css` from hardcoded `@theme inline` colors to CSS variables, enabling a clean `.light` mode override.
+- Wired the Settings gear icon in `SidebarHeader.tsx` to open the modal.
+- Integrated Privacy toggles into `page.tsx`: WebSocket frames for `mark_read`, `mark_delivered`, `typing_start`, and `typing_stop` are now suppressed if disabled in preferences.
+- Profile changes (display name, avatar) hooked up to existing `updateProfile` API logic.
+- Production build verified: `Compiled successfully` — zero TypeScript errors, zero lint errors.
 
 ### **[Milestone 11.5]** Read Receipts
 - Extended `frontend/contexts/WebSocketContext.tsx`:
@@ -157,34 +184,30 @@
 | **User Search & New Chat** | ✅ Complete | Search panel, DM creation, auto-select, sidebar upsert |
 | **Typing Indicators** | ✅ Complete | Debounced WS events, animated indicator, multi-user, auto-remove |
 | **Read Receipts** | ✅ Complete | Automated WS read/delivery dispatch, real-time message bubble status updates |
+| **Settings** | ✅ Complete | Modal overlay, local storage persistence, theme switching, privacy toggles, extensive UX polish |
 | **Testing** | ⚠️ Partial | Backend manually tested, no unit tests yet |
 | **Deployment** | ❌ Pending | Nothing deployed yet |
 
 ## GitHub Status
-- **Latest Commit:** `feat(frontend): implement Milestone 11 — typing indicators`
-- **Branch:** `main` (Behind — Milestones 6-11.5 not yet committed)
+- **Latest Commit:** `feat(frontend): implement Milestone 13 — settings`
+- **Branch:** `main` (Behind — Milestones 6-13.5 not yet committed)
 - **Suggested commit:**
   ```
-  feat(frontend): implement Milestone 11.5 — read receipts
+  feat(frontend): implement Milestone 13.5 — settings polish
 
-  Automate real-time delivery and read receipts using existing WebSocket architecture.
-
-  Extend WebSocketContext: add payload types, sendMarkRead, sendMarkDelivered,
-  and dispatch read_receipt/delivery_receipt frames.
-
-  Extend ChatContext: receiveReadReceipt updates own messages <= timestamp to 'read';
-  receiveDeliveryReceipt updates sent messages to 'delivered';
-  markConversationAsRead clears sidebar unreadCount.
-
-  page.tsx automation:
-  - onMessage: auto-send mark_delivered for incoming messages.
-  - useEffect: auto-send mark_read when selecting a conversation with unreads.
+  Add extensive UX, UI, and accessibility polish to the Settings Modal.
+  - Implement exit animations (fade + scale) and backdrop blur.
+  - Add lightweight focus trap, Escape key listener, and focus restoration.
+  - Implement drag-and-drop and remove photo logic for Avatars.
+  - Disable Save button if no changes exist; add loading spinners and error toasts.
+  - Add smooth transition colors in globals.css for Light/Dark mode flipping.
+  - Flesh out the About tab with Tech Stack and GitHub links.
 
   Compiled successfully, zero TS/lint errors.
   ```
 
 ## Current Blockers
-- None. Full real-time + new chat flow + typing indicators + read receipts implemented end-to-end.
+- None. Full real-time + settings + typing indicators + read receipts implemented end-to-end.
 
 ## TODO Checklist
 - [x] Initialize Next.js project in `frontend/`.
@@ -198,6 +221,7 @@
 - [x] Implement WebSocket client for real-time updates.
 - [x] Implement user search and new conversation flow.
 - [x] Implement real-time typing indicators.
+- [x] Implement Settings UI and preferences.
 - [ ] Write `README.md`.
 - [ ] Deploy frontend & backend.
 
